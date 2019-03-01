@@ -336,11 +336,12 @@
         const texture = new THREE.ImageUtils.loadTexture( "./china.jpg" );
         let geometry = new THREE.PlaneGeometry(xAxis,zAxis);
         let material = new THREE.MeshBasicMaterial( {
-            map: texture
+            map: texture,
+            side:THREE.DoubleSide
         });
         let rect = new THREE.Mesh(geometry,material);
-        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(xAxis / 2,-zAxis / 2, 0));
-        rect.rotation.x = -Math.PI / 2;
+        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(xAxis / 2, zAxis / 2, 0));
+        rect.rotation.x =  Math.PI / 2;
         scene.add(rect);
         texture.needsUpdate	= true;
         console.warn = function(){};
