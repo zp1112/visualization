@@ -10,6 +10,8 @@
         <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/1.18.0/TweenMax.min.js"></script>
         <script src="//d3js.org/queue.v1.min.js"></script>
         <script src="https://www.wjceo.com/lib/js/libs/stats.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
+        <script src="./js/drawaxis.js"></script>
         
 
         <style>
@@ -20,7 +22,7 @@
                 border-radius: 10px;
                 display: none;
             }
-            #bars, #sphere {
+            #bars, #spheres, #cubes {
                 position: absolute;
                 background: #fff;
                 padding: 10px;
@@ -28,16 +30,20 @@
                 left: 100px;
                 top: 100px;
             }
-            #sphere {
+            #spheres {
                 top: 150px;
+            }
+            #bars {
+                top: 200px;
             }
         </style>
         
     </head>  
     <body>  
         <div id="tooltip"></div>
+        <div id="cubes">cubes</div>
+        <div id="spheres">spheres</div>
         <div id="bars">bars</div>
-        <div id="sphere">sphere</div>
 
         <script>  
         const width = window.innerWidth;  
@@ -52,7 +58,9 @@
 
         const xAxis = 1000;
         const zAxis = 600;
-        const yAxis = 400;
+        var yAxis = 400;
+
+        const grid = 100;
 
         var cubeX;
         var cubeZ;
@@ -66,6 +74,15 @@
 
         var scaleLinearLat;
         var scaleLinearLon;
+
+        var fontOptions;
+
+        const texture = new THREE.ImageUtils.loadTexture( "./china.jpg" );
+        var rect; // 底部地图
+
+        var res, res1;
+
+        var sphereGridGroup = new THREE.Group();
           
         const scene = new THREE.Scene();      //创建场景  
         scene.background = new THREE.Color( 0x000000 );
@@ -80,7 +97,7 @@
             camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 1, 10000);
             // camera = new THREE.OrthographicCamera(window.innerWidth/-1.5,window.innerWidth/1.5,
             // window.innerHeight/1.5,window.innerHeight/-1.5,100,10000);
-            camera.position.set(1000,1000, 1000);//设置相机坐标
+            camera.position.set(500,1000, 1000);//设置相机坐标
             camera.lookAt({x: 0, y: 0, z: 0});//让相机指向场景中心
         }
         initOrthCamera();
@@ -96,63 +113,21 @@
         }
         initLight();
         textLoader.load("https://threejs.org/examples/fonts/helvetiker_regular.typeface.json", function(font) {
-            const fontOptions = {
-                    size: 18,
-                    height: 0,
-                    font, // “引用js字体必须换成英文”
-                    bevelThickness: 1,
-                    bevelSize: 1,
-                    bevelSegments: 1,
-                    curveSegments: 50,
-                    steps: 1
-                };
-            function createText() {
-                drawBarGrids();
-                const n = 5;
-                for(let i=0;i<=n;i++){
-                        // 使用TextBufferGeometry比TextGeometry快
-                        const textLeftTop = new THREE.TextBufferGeometry(scaleLinearLon.invert(i * 200).toFixed(2), fontOptions);
-                        const textMeshLeftTop = new THREE.Mesh(textLeftTop, new THREE.MeshBasicMaterial());
-                        
-                        textMeshLeftTop.position.x = i * xAxis / n;
-                        textMeshLeftTop.position.y = yAxis;
-                        textMeshLeftTop.position.z = -30;
-                        textMeshLeftTop.rotation.z = 45;
-                        textMeshLeftTop.rotation.x = -45;
-                        textGroup.add(textMeshLeftTop);
-                }
-                
-                for(let i=0;i<=n;i++){
-                        // 使用TextBufferGeometry比TextGeometry快
-                        const textLeftTop = new THREE.TextBufferGeometry(scaleLinearLon.invert(i * 200).toFixed(2), fontOptions);
-                        const textMeshLeftTop = new THREE.Mesh(textLeftTop, new THREE.MeshBasicMaterial());
-                        
-                        textMeshLeftTop.position.x = i * xAxis / n;
-                        textMeshLeftTop.position.y = 0;
-                        textMeshLeftTop.position.z = zAxis + 100;
-                        textMeshLeftTop.rotation.z = 45;
-                        textMeshLeftTop.rotation.x = -45;
-                        textGroup.add(textMeshLeftTop);
-                }
-
-                for(let i=0;i<=n;i++){
-                        // 使用TextBufferGeometry比TextGeometry快
-                        const textLeftTop = new THREE.TextBufferGeometry(scaleLinearLat.invert(i * 120).toFixed(2), fontOptions);
-                        const textMeshLeftTop = new THREE.Mesh(textLeftTop, new THREE.MeshBasicMaterial());
-                        
-                        textMeshLeftTop.position.x = -100;
-                        textMeshLeftTop.position.y = yAxis;
-                        textMeshLeftTop.position.z = i * zAxis / n;
-                        textMeshLeftTop.rotation.y = 45;
-                        textMeshLeftTop.rotation.x = -45;
-                        textGroup.add(textMeshLeftTop);
-                }
-                scene.add(textGroup);
-            }
-            queue().defer(d3.csv, "./Bank-of-China-ATMs.csv").await(ready);
+            fontOptions = {
+                size: 14,
+                height: 0,
+                font, // “引用js字体必须换成英文”
+                bevelThickness: 1,
+                bevelSize: 1,
+                bevelSegments: 1,
+                curveSegments: 50,
+                steps: 1
+            };
+            queue().defer(d3.csv, "./bank.csv").await(ready);
+        })
 
             function ready(error, data) {
-                const res = [];
+                res = [];
                 let temp = {};
                 const maxLat = Math.max(...(data.map(row => row.latitude)));
                 const minLat = Math.min(...(data.map(row => row.latitude)));
@@ -160,6 +135,7 @@
                 const minLon = Math.min(...(data.map(row => row.longitude)));
                 scaleLinearLat = d3.scaleLinear().domain([maxLat, minLat]).range([0, zAxis]);
                 scaleLinearLon = d3.scaleLinear().domain([minLon, maxLon]).range([0, xAxis]);
+                console.log(maxLon, minLon)
                 function formatData1() {
                     const density = 10;
                     cubeX = density;
@@ -222,46 +198,112 @@
                 }
                 // formatData2();
                 formatData1();
-                console.log(cubeX, cubeZ, cubeY)
+                if (cubeY > cubeX) {
+                    cubeY = cubeX
+                }
+                res1 = [];
+                for (const item of data) {
+                    const month = new Date(item.date).getMonth();
+                    if (!res1[month]) {
+                        res1[month] = [];
+                    } 
+                    item.index = res1[month].length;
+                    res1[month].push(item);
+                    item.month = month;
+                }
                 cubeGeometry = new THREE.BoxGeometry(cubeX, cubeY, cubeZ);
-                scaleName = d3.scaleOrdinal().domain(data.map(val => val.name)).range(d3.range(0, 400, 20));
+                scaleTime = d3.scaleTime();
                 cubesColorScale = d3.scaleLinear().domain([0, maxCount]).range([d3.rgb("#007AFF"), d3.rgb('#ff4300')]);
 
                 const resLen = res.length;
 
+                const cubesButton = document.getElementById('cubes');
+                cubesButton.addEventListener('click', () => transGroup('cubes', data, res), false);
+                const spheresButton = document.getElementById('spheres');
+                spheresButton.addEventListener('click', () => transGroup('spheres', data, res), false);
                 const barsButton = document.getElementById('bars');
-                barsButton.addEventListener('click', () => transGroup('spheres', 'cubes', data, res), false);
-                const spheresButton = document.getElementById('sphere');
-                spheresButton.addEventListener('click', () => transGroup('cubes', 'spheres', data, res), false);
+                barsButton.addEventListener('click', () => transGroup('bars', data, res), false);
 
-                function transGroup(from, to, data, res) {
+                function transGroup(to, data, res) {
                     if (curType === to) {
                         return;
                     }
                     const item = window.cubes;
-                    let name;
                     if (!item.length) {
                             renderBars(res);
                             return;
                     } else {
-                        if (from === 'cubes') {
-                            name = 'Name';
+                        scene.remove(lineGroup);
+                        scene.remove(textGroup);
+                        lineGroup = new THREE.Group();
+                        textGroup = new THREE.Group();
+                        scene.remove(zTextMesh);
+                        scene.remove(rect);
+                        rect = null;
+                        if (to === 'spheres') {
+                            scene.remove(rect);
+                            rect = null;
+                            // rect ? null : drawRect();
+                            yAxis = 600;
+                            scaleTime.range([0, yAxis]).domain((d3.extent(data, function(d) { return new Date(d.date); })))
+                            let count = 0;
+                            function sleep(delay) {
+                                var start = (new Date()).getTime();
+                                while ((new Date()).getTime() - start < delay) {
+                                    continue;
+                                }
+                                }
                             for(let i = 0, len = item.length; i < len; i ++) {
-                                const { name, longitude, latitude } = data[i];
+                                const { date, longitude, latitude } = data[i];
                                 new TweenMax.to(item[i][0].position, 1, {
-                                    y: scaleName(name) + cubeY,
+                                    y: scaleTime(new Date(date)) + cubeY,
                                     z: scaleLinearLat(latitude),
                                     x: scaleLinearLon(longitude),
                                     onUpdate: () => {  
                                         item[i][1].position.x = scaleLinearLon(longitude);
-                                        item[i][1].position.y = scaleName(name) + cubeY;
+                                        item[i][1].position.y = scaleTime(new Date(date)) + cubeY;
                                         item[i][1].position.z = scaleLinearLat(latitude);
                                         item[i][1].update();
+                                    },
+                                    onComplete: () => {
+                                        count += 1;
+                                        if (count === len) {
+                                            TweenMax.killAll();
+                                            createSphereText('Time');
+                                            drawRect();
+                                        }
+                                    }
+                                });
+                            }
+                            
+                        } else if(to === 'bars') {
+                            scene.remove(rect);
+                            rect = null;
+                            let count = 0;
+                            for(let i = 0, len = item.length; i < len; i ++) {
+                                new TweenMax.to(item[i][0].position, 1, {
+                                    y: Math.floor(item[i].index / 6) * cubeY + cubeY / 2,
+                                    z: cubeZ / 2,
+                                    x: item[i].index % 6 * cubeX + cubeX / 2 + item[i].month * (cubeX * 6 + 6),
+                                    onUpdate: () => {  
+                                        item[i][1].position.x = item[i].index % 6 * cubeX + item[i].month;
+                                        item[i][1].position.y = item[i].index % 6 * cubeY + item[i].month;
+                                        item[i][1].position.z = 0;
+                                        item[i][1].update();
+                                    },
+                                    onComplete: () => {
+                                        count += 1;
+                                        if (count === len) {
+                                            createBarText();
+                                        }
                                     }
                                 });
                             }
                         } else {
-                            name = 'Count';
+                            scene.remove(rect);
+                            rect = null;
+                            let count = 0;
+                            yAxis = 400;
                             for(let i = 0, len = item.length; i < len; i ++) {
                                 new TweenMax.to(item[i][0].position, 1, {
                                     y: res[item[i].i][item[i].j].centerPos.y,
@@ -272,40 +314,50 @@
                                         item[i][1].position.z = res[item[i].i][item[i].j].centerPos.z,
                                         item[i][1].position.x = res[item[i].i][item[i].j].centerPos.x
                                         item[i][1].update();
+                                    },
+                                    onComplete: () => {
+                                        count += 1;
+                                        if (count === len) {
+                                            createCubeText('Count');
+                                            drawRect();
+                                        }
                                     }
                                 });
                             }
                         }
-                        scene.remove(zTextMesh);
-                        createZText(name);
                         curType = to;
                     }
                 }
-                transGroup('cubes', 'spheres', data, res);
+                drawRect();
+                transGroup('spheres', data, res);
                 function renderBar(item, i, j) {
                             const material = new THREE.MeshLambertMaterial({
-                                color: cubesColorScale(j),
+                                color: '#57f972',
                                 transparent: true
                             });
                             cube = new THREE.Mesh(cubeGeometry, material);
                             cube.customType = 'cube';
-                            cube.customName = item.name;
+                            cube.customName = item.date;
+                            cube.customLat = item.latitude;
+                            cube.customLon = item.longitude;
                             cube.position.z = item.centerPos.z;
                             cube.position.x = item.centerPos.x;
-                            cube.position.y = j * cubeY + cubeY;
+                            cube.position.y = j * cubeY + cubeY / 2;
                             item.centerPos.y = cube.position.y;
 
                             var helper = new THREE.BoxHelper( cube );
                             helper.material.color.set( 0xe0dede );
-                            helper.material.linewidth = 1; // may no longer be supported on some platforms
+                            helper.material.linewidth = 0.1; // may no longer be supported on some platforms
                             helper.position.z = item.centerPos.z;
                             helper.position.x = item.centerPos.x;
-                            helper.position.y = j * cubeY + cubeY;
+                            helper.position.y = j * cubeY + cubeY / 2;
 
                             const subArr = [cube, helper];
 
                             subArr.i = i;
                             subArr.j = j;
+                            subArr.month = item.month;
+                            subArr.index = item.index;
                             cubes.push(subArr);
                             scene.add(cube);
                             scene.add(helper);
@@ -317,95 +369,10 @@
                         }
                     }
                     curType = 'cubes';
-                    createText();
-                    createZText('Count');
-                }
-                function createZText (name) {
-                    // 使用TextBufferGeometry比TextGeometry快
-                    const text = new THREE.TextBufferGeometry(name, fontOptions);
-                    zTextMesh = new THREE.Mesh(text, new THREE.MeshBasicMaterial());
-                    
-                    zTextMesh.position.x = -100;
-                    zTextMesh.position.y = 150;
-                    zTextMesh.position.z = 600;
-                    scene.add(zTextMesh);
+                    createCubeText('Count');
                 }
             }
-        })
-        
-        const texture = new THREE.ImageUtils.loadTexture( "./china.jpg" );
-        let geometry = new THREE.PlaneGeometry(xAxis,zAxis);
-        let material = new THREE.MeshBasicMaterial( {
-            map: texture,
-            side: THREE.DoubleSide
-        });
-        let rect = new THREE.Mesh(geometry,material);
-        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(xAxis / 2, zAxis / 2, 0));
-        rect.rotation.x =  Math.PI / 2;
-        scene.add(rect);
-        texture.needsUpdate	= true;
-        console.warn = function(){};
 
-        function drawBarGrids() {
-            const geometryLeft = new THREE.Geometry();    //创建geometry  
-            geometryLeft.vertices.push(new THREE.Vector3(0, 0 ,0));  //添加顶点  
-            geometryLeft.vertices.push(new THREE.Vector3(xAxis, 0, 0));  
-
-            const geometryLeft1 = new THREE.Geometry();    //创建geometry  
-            geometryLeft1.vertices.push(new THREE.Vector3(0, 0 ,0));  //添加顶点  
-            geometryLeft1.vertices.push(new THREE.Vector3(zAxis, 0, 0)); 
-            const n = 5;
-            
-            // 底部面 600 * 1000
-            for(let i=0;i<=n;i++){
-                const line1 = new THREE.Line(geometryLeft, new THREE.LineBasicMaterial({color:0xff0000})); 
-                line1.position.z = i*zAxis/n; 
-                lineGroup.add(line1);  
-                
-                const line11 = new THREE.Line(geometryLeft1, new THREE.LineBasicMaterial({color:0xff0000}));  
-                line11.position.x = i*xAxis/n;  
-                line11.rotation.y = -Math.PI/2; 
-                lineGroup.add(line11);  
-            }
-
-            const geometryBack = new THREE.Geometry();    //创建geometry  
-            geometryBack.vertices.push(new THREE.Vector3(0, 0 ,0));  //添加顶点  
-            geometryBack.vertices.push(new THREE.Vector3(0, 0, zAxis));  
-            const geometryBack1 = new THREE.Geometry();    //创建geometry  
-            geometryBack1.vertices.push(new THREE.Vector3(0, 0 ,0));  //添加顶点  
-            geometryBack1.vertices.push(new THREE.Vector3(0, 0, yAxis)); 
-
-            // 左边面 400 * 600
-            for(let i=0;i<=n;i++){
-                const line2 = new THREE.Line(geometryBack, new THREE.LineBasicMaterial({color:0x00ff00})); 
-                line2.position.y = i*yAxis/n; 
-                lineGroup.add(line2);  
-                
-                const line22 = new THREE.Line(geometryBack1, new THREE.LineBasicMaterial({color:0x00ff00}));  
-                line22.position.z = i*zAxis/n;  
-                line22.rotation.x = -Math.PI/2; 
-                lineGroup.add(line22);  
-            }
-
-            const geometryBottom = new THREE.Geometry();    //创建geometry  
-            geometryBottom.vertices.push(new THREE.Vector3(0, 0 ,0));  //添加顶点  
-            geometryBottom.vertices.push(new THREE.Vector3(xAxis, 0, 0)); 
-            const geometryBottom1 = new THREE.Geometry();    //创建geometry  
-            geometryBottom1.vertices.push(new THREE.Vector3(0, 0 ,0));  //添加顶点  
-            geometryBottom1.vertices.push(new THREE.Vector3(yAxis, 0, 0)); 
-            // 后边面 400 * 1000
-            for(let i=0;i<=n;i++){
-                const line3 = new THREE.Line(geometryBottom, new THREE.LineBasicMaterial({color:0x0000ff})); 
-                line3.position.y = i*yAxis/n; 
-                lineGroup.add(line3);  
-                
-                const line33 = new THREE.Line(geometryBottom1, new THREE.LineBasicMaterial({color:0x0000ff}));  
-                line33.position.x = i*xAxis/n;  
-                line33.rotation.z = Math.PI/2; 
-                lineGroup.add(line33);  
-            }
-            scene.add(lineGroup);
-        }
 
         // mousemove事件
         const raycaster = new THREE.Raycaster();
@@ -433,7 +400,7 @@
                     INTERSECTED = intersects[0].object;
                     INTERSECTED.currentColor = JSON.parse(JSON.stringify(INTERSECTED.material.color));
                     INTERSECTED.material.color.set( 0xff0000 );
-                    tooltip.innerHTML = INTERSECTED.customName;
+                    tooltip.innerHTML = INTERSECTED.customName + '-' + INTERSECTED.customLon + '-' + INTERSECTED.customLat;
                     tooltip.style.left = tooltipPosition ? tooltipPosition.x : '';
                     tooltip.style.top = tooltipPosition ? tooltipPosition.y : '';
                     tooltip.style.display = 'block';
