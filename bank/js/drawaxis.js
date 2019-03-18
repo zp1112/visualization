@@ -71,7 +71,8 @@ function drawCommonText(textGroup, xAxis, yAxis, zAxis, grid) {
             
             textMeshLeftTop.position.x = i * grid;
             textMeshLeftTop.position.y = yAxis;
-            textMeshLeftTop.position.z = -30;
+            var bbox = new THREE.Box3().setFromObject(textMeshLeftTop);
+            textMeshLeftTop.position.z = -(bbox.max.y - bbox.min.y);
             textMeshLeftTop.rotation.z = 45;
             textMeshLeftTop.rotation.x = -45;
             textGroup.add(textMeshLeftTop);
@@ -84,7 +85,9 @@ function drawCommonText(textGroup, xAxis, yAxis, zAxis, grid) {
             
             textMeshLeftTop.position.x = i * grid;
             textMeshLeftTop.position.y = 0;
-            textMeshLeftTop.position.z = zAxis + 100;
+            var bbox = new THREE.Box3().setFromObject(textMeshLeftTop);
+            textMeshLeftTop.position.z = (zAxis + bbox.max.x - bbox.min.x);
+            // textMeshLeftTop.position.z = zAxis + 100;
             textMeshLeftTop.rotation.z = 45;
             textMeshLeftTop.rotation.x = -45;
             textGroup.add(textMeshLeftTop);
@@ -95,14 +98,16 @@ function drawCommonText(textGroup, xAxis, yAxis, zAxis, grid) {
             const textLeftTop = new THREE.TextBufferGeometry(scaleLinearLat.invert(i * grid).toFixed(2), fontOptions);
             const textMeshLeftTop = new THREE.Mesh(textLeftTop, new THREE.MeshBasicMaterial());
             
-            textMeshLeftTop.position.x = -70;
+            var bbox = new THREE.Box3().setFromObject(textMeshLeftTop);
+            textMeshLeftTop.position.x = -(bbox.max.x - bbox.min.x);
+            // textMeshLeftTop.position.x = -70;
             textMeshLeftTop.position.y = yAxis;
             textMeshLeftTop.position.z = i * grid;
             textMeshLeftTop.rotation.x = -45;
             textGroup.add(textMeshLeftTop);
     }
 }
-function initSphereText(name, { xAxis, yAxis, zAxis, grid }) {
+function initSphereText({ xAxis, yAxis, zAxis, grid }) {
     drawRect(sphereGridGroup, xAxis, zAxis);
     drawCommonText(sphereGridGroup, xAxis, yAxis, zAxis, grid);
     n = 10;
@@ -110,19 +115,13 @@ function initSphereText(name, { xAxis, yAxis, zAxis, grid }) {
         // 使用TextBufferGeometry比TextGeometry快
         const textLeftTop = new THREE.TextBufferGeometry(moment(scaleTime.invert(i * 60)).format('YYYY-MM-DD hh:mm:ss'), fontOptions);
         const textMeshLeftTop = new THREE.Mesh(textLeftTop, new THREE.MeshBasicMaterial());
+        var bbox = new THREE.Box3().setFromObject(textMeshLeftTop);
         
-        textMeshLeftTop.position.x = -320;
+        textMeshLeftTop.position.x = - (bbox.max.x - bbox.min.x);
         textMeshLeftTop.position.y = i * yAxis / n;
         textMeshLeftTop.position.z = zAxis;
         sphereGridGroup.add(textMeshLeftTop);
     }
-    
-    const zTextMesh = new THREE.Mesh(new THREE.TextBufferGeometry(name, fontOptions), new THREE.MeshBasicMaterial());
-    
-    zTextMesh.position.x = -240;
-    zTextMesh.position.y = yAxis / 2;
-    zTextMesh.position.z = 600;
-    sphereGridGroup.add(zTextMesh);
 }
 
 function initCubeText(name, { xAxis, yAxis, zAxis, grid }) {
@@ -130,7 +129,8 @@ function initCubeText(name, { xAxis, yAxis, zAxis, grid }) {
     drawCommonText(cubeGridGroup, xAxis, yAxis, zAxis, grid);
     const zTextMesh = new THREE.Mesh(new THREE.TextBufferGeometry(name, fontOptions), new THREE.MeshBasicMaterial());
     
-    zTextMesh.position.x = -100;
+    var bbox = new THREE.Box3().setFromObject(zTextMesh);
+    zTextMesh.position.x = -(bbox.max.x - bbox.min.x);
     zTextMesh.position.y = yAxis / 2;
     zTextMesh.position.z = 600;
     cubeGridGroup.add(zTextMesh);
@@ -212,7 +212,8 @@ function initBarText({ xAxis, yAxis, zAxis, grid, perCount, ygrid }) {
             const textLeftTop = new THREE.TextBufferGeometry(i * perCount * perCount + '', fontOptions);
             const textMeshLeftTop = new THREE.Mesh(textLeftTop, new THREE.MeshBasicMaterial());
             
-            textMeshLeftTop.position.x = -50;
+            var bbox = new THREE.Box3().setFromObject(textMeshLeftTop);
+            textMeshLeftTop.position.x = -(bbox.max.x - bbox.min.x + 10);
             textMeshLeftTop.position.y = i * ygrid;
             textMeshLeftTop.position.z = 0;
             barGridGroup.add(textMeshLeftTop);

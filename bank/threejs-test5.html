@@ -71,6 +71,7 @@
             xAxis: 1000
         }
 
+        // 小立方体的边长
         var cubeX;
         var cubeZ;
         var cubeY;
@@ -83,11 +84,19 @@
         var scaleLinearLat;
         var scaleLinearLon;
 
-        var fontOptions;
+        var fontOptions = {
+                size: 14,
+                height: 0,
+                bevelThickness: 1,
+                bevelSize: 1,
+                bevelSegments: 1,
+                curveSegments: 50,
+                steps: 1
+            };
 
         const texture = new THREE.ImageUtils.loadTexture( "./china.jpg" );
 
-        var res, res1;
+        var res = []; // 二维数组
 
         var sphereGridGroup = new THREE.Group();
         var barGridGroup = new THREE.Group();
@@ -122,21 +131,11 @@
         }
         initLight();
         textLoader.load("https://threejs.org/examples/fonts/helvetiker_regular.typeface.json", function(font) {
-            fontOptions = {
-                size: 14,
-                height: 0,
-                font, // “引用js字体必须换成英文”
-                bevelThickness: 1,
-                bevelSize: 1,
-                bevelSegments: 1,
-                curveSegments: 50,
-                steps: 1
-            };
+            fontOptions.font = font;
             queue().defer(d3.csv, "./bank.csv").await(ready);
         })
 
             function ready(error, data) {
-                res = [];
                 let temp = {};
                 const maxLat = Math.max(...(data.map(row => row.latitude)));
                 const minLat = Math.min(...(data.map(row => row.latitude)));
@@ -211,25 +210,25 @@
                 if (cubeY > cubeX) {
                     cubeY = cubeX
                 }
-                res1 = [];
                 for (const item of data) {
                     const month = new Date(item.date).getMonth();
-                    if (!res1[month]) {
-                        res1[month] = 1;
-                    } 
-                    item.index = res1[month] - 1;
+                    const monthArr = data.filter(row => row.month === month);
+                    if (!monthArr.length) {
+                        item.index = 0;
+                    } else {
+                        const curIndex = Math.max(...(monthArr.map(row => row.index)));
+                        item.index = curIndex + 1;
+                    }
                     item.month = month;
-                    res1[month] += 1;
                 }
 
                 barAxis.perCount = Math.ceil(barAxis.xAxis / 12 / cubeX);
-                barAxis.xAxis = (barAxis.perCount * cubeX + barAxis.bandWidth) * 12;
-                barAxis.yAxis = Math.max(...(Object.values(res1))) / 6 * cubeY;
+                barAxis.xAxis = (barAxis.perCount * cubeX + barAxis.bandWidth) * 12; // 调整xAxis
+                barAxis.yAxis = Math.ceil(Math.max(...(data.map(row => row.index))) / barAxis.perCount / barAxis.perCount) * barAxis.perCount * cubeY; // 调整yAxis
                 barAxis.ygrid = barAxis.perCount * cubeY;
                 barAxis.grid = barAxis.perCount * cubeX + barAxis.bandWidth;
                 barAxis.zAxis = cubeZ;
-
-                console.log(999, barAxis)
+                console.log(barAxis)
                 
                 cubeGeometry = new THREE.BoxGeometry(cubeX, cubeY, cubeZ);
                 scaleTime = d3.scaleTime().range([0, 600]).domain((d3.extent(data, function(d) { return new Date(d.date); })))
@@ -245,7 +244,7 @@
                 barsButton.addEventListener('click', () => transGroup('bars', data, res), false);
 
                 initBarText(barAxis);
-                initSphereText('Name', sphereAxis);
+                initSphereText(sphereAxis);
                 initCubeText('Count', cubeAxis);
 
                 function transGroup(to, data, res) {
