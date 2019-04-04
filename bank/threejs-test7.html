@@ -11,8 +11,9 @@
         <script src="//d3js.org/queue.v1.min.js"></script>
         <script src="https://www.wjceo.com/lib/js/libs/stats.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
+        <script src="./js/utils.js"></script>
         <script src="./js/drawaxis.js"></script>
-        <script src="./js/drawgrid.js"></script>
+        <script src="./js/drawgrid.1.js"></script>
         
 
         <style>
@@ -96,6 +97,8 @@
         const planeAxis = {
             xAxis: 1000,
             zAxis: 600,
+            yAxis: 0,
+            ygrid: 0,
             xgrid: 100,
             zgrid: 100,
             group: planeGridGroup
@@ -107,14 +110,16 @@
         var cubeY;
         var maxCount;
 
-        const textLoader = new THREE.FontLoader();
-
         var cubeGeometry;
 
         var scaleLinearLat;
         var scaleLinearLon;
 
-        const texture = new THREE.ImageUtils.loadTexture( "./china.jpg" );
+        var xztheta, zxtheta;
+
+        var curTypeMap = {};
+
+        const texture = new THREE.TextureLoader().load( './china.jpg' );
 
         var res = []; // 二维数组
 
@@ -126,8 +131,6 @@
 
         function initOrthCamera(){
             camera = new THREE.PerspectiveCamera(45, width/height, 1, 100000);
-            // camera = new THREE.OrthographicCamera(window.innerWidth/-1.5,window.innerWidth/1.5,
-            // window.innerHeight/1.5,window.innerHeight/-1.5,100,10000);
             camera.position.set(800,1500, 1500);//设置相机坐标
             camera.lookAt({x: 0, y: 0, z: 0});//让相机指向场景中心
         }
@@ -142,9 +145,17 @@
             scene.add(light);
         }
         function animate() {
-            // vector = camera.getWorldDirection();
-            // theta = Math.atan2(vector.x,vector.z);
-            // console.log(theta)
+            const vector = camera.getWorldDirection(new THREE.Vector3());
+            const curxztheta = Math.atan2(vector.x,vector.z) > 0 ? 1 : -1;
+            const curzxtheta = Math.atan2(vector.z,vector.x) > 0 ? 1 : -1;
+            if (curxztheta == -xztheta) {
+                xztheta = curxztheta;
+                Object.values(curTypeMap).forEach(row => row.updateText(1, xztheta, zxtheta));
+            }
+            if (curzxtheta == -zxtheta) {
+                zxtheta = curzxtheta;
+                Object.values(curTypeMap).forEach(row => row.updateText(2, xztheta, zxtheta));
+            }
             stats.update();
             requestAnimationFrame( animate );
             renderer.render(scene, camera);
@@ -158,7 +169,7 @@
             scene.translateX(- width / 4);
             scene.translateY(height / 4);
             initLight();
-            renderer = new THREE.WebGLRenderer({antialias : true});     //创建渲染器（并设置抗锯齿属性）
+            renderer = new THREE.WebGLRenderer({antialias : true, logarithmicDepthBuffer: true});     //创建渲染器（并设置抗锯齿属性）
             renderer.setSize(width, height);    //设置渲染器的大小
             container.appendChild(renderer.domElement);
             controls = new THREE.OrbitControls( camera, renderer.domElement );
@@ -166,6 +177,11 @@
             window.addEventListener('resize', function(){
                 renderer.setSize(window.innerWidth, window.innerHeight);
             })
+            const vector = camera.getWorldDirection(new THREE.Vector3());
+            xztheta = Math.atan2(vector.x,vector.z) > 0 ? 1 : -1;
+
+            zxtheta = Math.atan2(vector.x,vector.y) > 0 ? 1 : -1;
+            
             // mousemove事件
             const tooltipPosition = {};
             let intersects = [];
@@ -213,6 +229,8 @@
             const minLon = Math.min(...(data.map(row => row.longitude)));
             scaleLinearLat = d3.scaleLinear().domain([maxLat, minLat]).range([0, cubeAxis.zAxis]);
             scaleLinearLon = d3.scaleLinear().domain([minLon, maxLon]).range([0, cubeAxis.xAxis]);
+            scaleTime = d3.scaleTime().range([0, 600]).domain((d3.extent(data, function(d) { return new Date(d.date); })))
+
             const { xAxis, yAxis, zAxis } = cubeAxis;
             const density = 10;
             cubeX = density;
@@ -261,6 +279,21 @@
                 item.month = month;
             }
 
+            cubeGeometry = new THREE.BoxGeometry(cubeX, cubeY, cubeZ);
+            cubesColorScale = d3.scaleLinear().domain([0, maxCount]).range([d3.rgb("#007AFF"), d3.rgb('#ff4300')]);
+
+            cubeAxis.scaleY = d3.scaleLinear().domain([0, maxCount]).range([0, cubeAxis.yAxis]);
+            cubeAxis.scaleZ = i => scaleLinearLat.invert(i * cubeAxis.zgrid).toFixed(2);
+            cubeAxis.scaleX = i => scaleLinearLon.invert(i * cubeAxis.xgrid).toFixed(2);
+
+            sphereAxis.scaleY = i => moment(scaleTime.invert(i * sphereAxis.ygrid)).format('YYYY-MM-DD hh:mm:ss');
+            sphereAxis.scaleZ = i => scaleLinearLat.invert(i * sphereAxis.zgrid).toFixed(2);
+            sphereAxis.scaleX = i => scaleLinearLon.invert(i * sphereAxis.xgrid).toFixed(2);
+
+            planeAxis.scaleY = i => '';
+            planeAxis.scaleZ = i => scaleLinearLat.invert(i * planeAxis.zgrid).toFixed(2);
+            planeAxis.scaleX = i => scaleLinearLon.invert(i * planeAxis.xgrid).toFixed(2);
+
             barAxis.perCount = Math.ceil(barAxis.xAxis / 12 / cubeX);
             barAxis.xAxis = (barAxis.perCount * cubeX + barAxis.bandWidth) * 12; // 调整xAxis
             barAxis.yAxis = Math.ceil(Math.max(...(data.map(row => row.index))) / barAxis.perCount / barAxis.perCount) * barAxis.perCount * cubeY; // 调整yAxis
@@ -268,13 +301,9 @@
             barAxis.xgrid = barAxis.perCount * cubeX + barAxis.bandWidth;
             barAxis.zgrid = cubeZ;
             barAxis.zAxis = cubeZ;
-            console.log(barAxis)
-            
-            cubeGeometry = new THREE.BoxGeometry(cubeX, cubeY, cubeZ);
-            scaleTime = d3.scaleTime().range([0, 600]).domain((d3.extent(data, function(d) { return new Date(d.date); })))
-            cubesColorScale = d3.scaleLinear().domain([0, maxCount]).range([d3.rgb("#007AFF"), d3.rgb('#ff4300')]);
-
-            const resLen = res.length;
+            barAxis.scaleY = i => i * barAxis.perCount * barAxis.perCount;
+            barAxis.scaleZ = i => '';
+            barAxis.scaleX = i => i + 1;
 
             const cubesButton = document.getElementById('cubes');
             cubesButton.addEventListener('click', () => transGroup('cubes'), false);
@@ -285,10 +314,10 @@
             const planesButton = document.getElementById('planes');
             planesButton.addEventListener('click', () => transGroup('planes'), false);
 
-            initPlaneText(planeAxis);
-            initBarText(barAxis);
-            initSphereText(sphereAxis);
-            initCubeText(cubeAxis);
+            curTypeMap.planes = new PlaneText(planeAxis, xztheta, zxtheta);
+            curTypeMap.cubes = new CubeText(cubeAxis, xztheta, zxtheta);
+            curTypeMap.bars = new BarText(barAxis, xztheta, zxtheta);
+            curTypeMap.spheres = new SphereText(sphereAxis, xztheta, zxtheta);
 
             function transGroup(to) {
                 if (curType === to) {
@@ -315,7 +344,6 @@
                                 }
                             });
                         }
-                        
                     } else if(to === 'bars') {
                         const { perCount, bandWidth } = barAxis;
                         for(let i = 0; i < len; i ++) {
@@ -336,8 +364,8 @@
                             const { date, longitude, latitude } = data[i];
                             new TweenMax.to(cubes[i].position, 1, {
                                 y: cubeY / 2,
-                                z: res[cubes[i].i][cubes[i].j].centerPos.z,
-                                x: res[cubes[i].i][cubes[i].j].centerPos.x,
+                                z: scaleLinearLat(res[cubes[i].i][cubes[i].j].latitude),
+                                x: scaleLinearLon(res[cubes[i].i][cubes[i].j].longitude),
                                 onComplete: () => {
                                     count += 1;
                                     if (count === len) {
@@ -377,12 +405,14 @@
                 item.centerPos.y = j * cubeY + cubeY / 2;
 
                 var helper = new THREE.BoxHelper( cube1 );
-                helper.material.color.set( 0xe0dede );
+                helper.material.color.set( 0x0be064 );
 
                 const cubeGroup = new THREE.Object3D();
                 cubeGroup.add(cube1, helper);
-                cubeGroup.position.z = item.centerPos.z;
-                cubeGroup.position.x = item.centerPos.x;
+                // cubeGroup.position.z = item.centerPos.z;
+                // cubeGroup.position.x = item.centerPos.x;
+                cubeGroup.position.z = scaleLinearLat(item.latitude);
+                cubeGroup.position.x = scaleLinearLon(item.longitude);
                 cubeGroup.position.y = cubeY / 2;
 
                 cubeGroup.i = i;
@@ -393,6 +423,7 @@
                 scene.add(cubeGroup);
             }
             function initCubes() {
+                const resLen = res.length;
                 for (let i = 0; i < resLen; i ++) {
                     for (let j = 0; j < res[i].length; j ++) {
                         initCube(res[i][j], i, j);
