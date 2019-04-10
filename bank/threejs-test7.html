@@ -13,7 +13,7 @@
         <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
         <script src="./js/utils.js"></script>
         <script src="./js/drawaxis.js"></script>
-        <script src="./js/drawgrid.1.js"></script>
+        <script src="./js/drawgrid.3.js"></script>
         
 
         <style>
@@ -115,7 +115,7 @@
         var scaleLinearLat;
         var scaleLinearLon;
 
-        var xztheta, zxtheta;
+        var quadrant;
 
         var curTypeMap = {};
 
@@ -128,7 +128,6 @@
             stats = new Stats();
             document.body.appendChild(stats.dom);
         }
-
         function initOrthCamera(){
             camera = new THREE.PerspectiveCamera(45, width/height, 1, 100000);
             camera.position.set(800,1500, 1500);//设置相机坐标
@@ -146,15 +145,11 @@
         }
         function animate() {
             const vector = camera.getWorldDirection(new THREE.Vector3());
-            const curxztheta = Math.atan2(vector.x,vector.z) > 0 ? 1 : -1;
-            const curzxtheta = Math.atan2(vector.z,vector.x) > 0 ? 1 : -1;
-            if (curxztheta == -xztheta) {
-                xztheta = curxztheta;
-                Object.values(curTypeMap).forEach(row => row.updateText(1, xztheta, zxtheta));
-            }
-            if (curzxtheta == -zxtheta) {
-                zxtheta = curzxtheta;
-                Object.values(curTypeMap).forEach(row => row.updateText(2, xztheta, zxtheta));
+            const curquadrant = getQuadrant(0, 0, vector.x,vector.z)
+            if (curquadrant !== quadrant) {
+                quadrant = curquadrant;
+                console.log(quadrant)
+                Object.values(curTypeMap).forEach(row => row.updateText(quadrant));
             }
             stats.update();
             requestAnimationFrame( animate );
@@ -178,9 +173,7 @@
                 renderer.setSize(window.innerWidth, window.innerHeight);
             })
             const vector = camera.getWorldDirection(new THREE.Vector3());
-            xztheta = Math.atan2(vector.x,vector.z) > 0 ? 1 : -1;
-
-            zxtheta = Math.atan2(vector.x,vector.y) > 0 ? 1 : -1;
+            quadrant = getQuadrant(0, 0, vector.x,vector.z)
             
             // mousemove事件
             const tooltipPosition = {};
@@ -314,10 +307,10 @@
             const planesButton = document.getElementById('planes');
             planesButton.addEventListener('click', () => transGroup('planes'), false);
 
-            curTypeMap.planes = new PlaneText(planeAxis, xztheta, zxtheta);
-            curTypeMap.cubes = new CubeText(cubeAxis, xztheta, zxtheta);
-            curTypeMap.bars = new BarText(barAxis, xztheta, zxtheta);
-            curTypeMap.spheres = new SphereText(sphereAxis, xztheta, zxtheta);
+            curTypeMap.planes = new PlaneText(planeAxis, quadrant);
+            curTypeMap.cubes = new CubeText(cubeAxis, quadrant);
+            curTypeMap.bars = new BarText(barAxis, quadrant);
+            curTypeMap.spheres = new SphereText(sphereAxis, quadrant);
 
             function transGroup(to) {
                 if (curType === to) {

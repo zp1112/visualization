@@ -1,137 +1,61 @@
-function PlaneText(axis, xztheta, zxtheta) {
+function PlaneText(axis, quadrant) {
     const { group, xAxis, zAxis } = axis;
     drawRect(group, xAxis, zAxis);
     this.group = group;
     drawGrid({
         textz: 'latitude', ...axis, texty: '', textx: 'longitude'
     });
-    this.updateText(1, xztheta, zxtheta);
-    this.updateText(2, xztheta, zxtheta);
+    this.updateText(quadrant);
+    this.updateText(quadrant);
 }
 PlaneText.prototype = {
     updateText
 }
-function SphereText(axis, xztheta, zxtheta) {
+function SphereText(axis, quadrant) {
     const { group, xAxis, zAxis } = axis;
     drawRect(group, xAxis, zAxis);
     this.group = group;
     drawGrid({
         textz: 'latitude', ...axis, texty: 'Time', textx: 'longitude'
     });
-    this.updateText(1, xztheta, zxtheta);
-    this.updateText(2, xztheta, zxtheta);
+    this.updateText(quadrant);
+    this.updateText(quadrant);
 }
 
 SphereText.prototype = {
     updateText
 }
-function CubeText(axis, xztheta, zxtheta) {
+function CubeText(axis, quadrant) {
     const { group, xAxis, zAxis } = axis;
     drawRect(group, xAxis, zAxis);
     this.group = group;
     drawGrid({
         textz: 'latitude', ...axis, texty: 'Count', textx: 'longitude'
     });
-    this.updateText(1, xztheta, zxtheta);
-    this.updateText(2, xztheta, zxtheta);
+    this.updateText(quadrant);
+    this.updateText(quadrant);
 }
 CubeText.prototype = {
     updateText
 }
 
-function BarText(axis, xztheta, zxtheta) {
+function BarText(axis, quadrant) {
     this.group = axis.group;
     drawGrid({
-        textz: 'xx', ...axis, texty: 'Count', textx: 'Month'
+        textz: 'xx', ...axis, texty: 'Count', textx: 'Month', xAxisCenter: true
     });
-    this.updateText(1, xztheta, zxtheta);
-    this.updateText(2, xztheta, zxtheta);
+    this.updateText(quadrant);
+    this.updateText(quadrant);
 }
 
 BarText.prototype = {
     updateText
 }
-function updateText(type, xztheta, zxtheta) {
-    if (xztheta > 0) {
-        this.group.children.forEach(row => {
-            if (row.show === 'right' || row.show === 'all') {
-                row.visible = true;
-            }
-            if (row.show === 'left' || row.show === 'none') {
-                row.visible = false;
-            }
-        })
-    } else {
-        this.group.children.forEach(row => {
-            if (row.show === 'left' || row.show === 'all') {
-                row.visible = true;
-            } 
-            if (row.show === 'right' || row.show === 'none') {
-                row.visible = false;
-            }
-        })
-    }
-    if (zxtheta > 0) {
-        this.group.children.forEach(row => {
-            if (row.show === 'front' || row.show === 'all') {
-                row.visible = true;
-            }
-            if (row.show === 'back' || row.show === 'none') {
-                row.visible = false;
-            }
-        })
-    } else {
-        this.group.children.forEach(row => {
-            if (row.show === 'back' || row.show === 'all') {
-                row.visible = true;
-            } 
-            if (row.show === 'front' || row.show === 'none') {
-                row.visible = false;
-            }
-        })
-    }
-    if (zxtheta > 0) {
-        if (xztheta < 0) {
-            this.group.children.forEach(row => {
-                if (row.show1 === 'front') {
-                    row.visible = true;
-                } 
-                if (row.show1 === 'back') {
-                    row.visible = false;
-                }
-            })
-        } else {
-            this.group.children.forEach(row => {
-                if (row.show1 === 'back') {
-                    row.visible = true;
-                } 
-                if (row.show1 === 'front') {
-                    row.visible = false;
-                }
-            })
-        }
-    }
-    if (zxtheta < 0) {
-        if (xztheta < 0) {
-            this.group.children.forEach(row => {
-                if (row.show1 === 'back') {
-                    row.visible = true;
-                } 
-                if (row.show1 === 'front') {
-                    row.visible = false;
-                }
-            })
-        } else {
-            this.group.children.forEach(row => {
-                if (row.show1 === 'front') {
-                    row.visible = true;
-                } 
-                if (row.show1 === 'back') {
-                    row.visible = false;
-                }
-            })
-        }
-    }
+function updateText(quadrant) {
+    this.group.children.forEach(row => {
+        typeof row.rotationfunc == 'function' ? row.rotationfunc(quadrant) : null;
+        typeof row.visiblefunc == 'function' ? row.visiblefunc(quadrant) : null;
+    })
 }
 function showText(group) {
     scene.add(group);
@@ -144,7 +68,7 @@ function drawRect(gridGroup, xAxis, zAxis) {
     let geometry = new THREE.PlaneGeometry(xAxis,zAxis);
     let material = new THREE.MeshBasicMaterial( {
         map: texture,
-        side: THREE.DoubleSide
+        // side: THREE.DoubleSide
     });
     const rect = new THREE.Mesh(geometry, material);
     rect.applyMatrix(new THREE.Matrix4().makeTranslation(xAxis / 2, 0, zAxis / 2));
