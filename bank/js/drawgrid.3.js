@@ -82,7 +82,7 @@ function drawGrid(options) {
     group.add(spritey);
 
     var spritey = spritey.clone();
-    spritey.position.set(xAxis + textWidth / 2 + maxTextWidth, yAxis + textWidth / 2, zAxis / 2);
+    spritey.position.set(xAxis + textWidth / 2 + maxTextWidth, yAxis + textWidth, zAxis / 2);
     spritey.visiblefunc = visiblefunc;
     group.add(spritey);
 
