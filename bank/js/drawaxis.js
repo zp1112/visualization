@@ -68,12 +68,12 @@ function drawRect(gridGroup, xAxis, zAxis) {
     let geometry = new THREE.PlaneGeometry(xAxis,zAxis);
     let material = new THREE.MeshBasicMaterial( {
         map: texture,
-        // side: THREE.DoubleSide
+        side: THREE.DoubleSide
     });
     const rect = new THREE.Mesh(geometry, material);
     rect.applyMatrix(new THREE.Matrix4().makeTranslation(xAxis / 2, 0, zAxis / 2));
     rect.position.y =  -4;
     rect.rotation.x =  -Math.PI / 2;
     gridGroup.add(rect);
-    material.map.needsUpdate	= true;
+    material.map.needsUpdate = true;
 }

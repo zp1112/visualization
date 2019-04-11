@@ -1,70 +1,87 @@
-<!doctype html>  
-<html>  
-    <head>  
-        <meta charset="utf-8"/>  
-        <title>Grid</title>  
-        <style>body{background:#eeeeee;margin:0;padding:0;}</style>  
-        <script src="https://d3js.org/d3.v4.min.js"></script>
-        <script src="https://threejs.org/build/three.js"></script>  
-        <script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/1.18.0/TweenMax.min.js"></script>
-        <script src="//d3js.org/queue.v1.min.js"></script>
-        <script src="https://www.wjceo.com/lib/js/libs/stats.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
-        <script src="./js/utils.js"></script>
-        <script src="./js/drawaxis.js"></script>
-        <script src="./js/drawgrid.3.js"></script>
-        
+<!doctype html>
+<html>
 
-        <style>
-            html, body {
-                height: 100%;
-            }
-            #tooltip {
-                position: absolute;
-                background: #fff;
-                padding: 10px;
-                border-radius: 10px;
-                display: none;
-            }
-            #bars, #spheres, #cubes, #planes {
-                position: absolute;
-                background: #fff;
-                padding: 10px;
-                border-radius: 10px;
-                left: 100px;
-                top: 100px;
-            }
-            #spheres {
-                top: 150px;
-            }
-            #bars {
-                top: 200px;
-            }
-            #planes {
-                top: 250px;
-            }
-        </style>
-        
-    </head>  
-    <body>  
-        <div id="tooltip"></div>
-        <div id="cubes">cubes</div>
-        <div id="spheres">spheres</div>
-        <div id="bars">bars</div>
-        <div id="planes">planes</div>
+<head>
+    <meta charset="utf-8" />
+    <title>Grid</title>
+    <style>
+        body {
+            background: #eeeeee;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="https://threejs.org/build/three.js"></script>
+    <script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/1.18.0/TweenMax.min.js"></script>
+    <script src="//d3js.org/queue.v1.min.js"></script>
+    <script src="./js/stats.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
+    <script src="./js/utils.js"></script>
+    <script src="./js/drawaxis.js"></script>
+    <script src="./js/drawgrid.3.js"></script>
 
 
-        <script>
+    <style>
+        html,
+        body {
+            height: 100%;
+        }
+
+        #tooltip {
+            position: absolute;
+            background: #fff;
+            padding: 10px;
+            border-radius: 10px;
+            display: none;
+        }
+
+        #bars,
+        #spheres,
+        #cubes,
+        #planes {
+            position: absolute;
+            background: #fff;
+            padding: 10px;
+            border-radius: 10px;
+            left: 100px;
+            top: 100px;
+        }
+
+        #spheres {
+            top: 150px;
+        }
+
+        #bars {
+            top: 200px;
+        }
+
+        #planes {
+            top: 250px;
+        }
+    </style>
+
+</head>
+
+<body>
+    <div id="tooltip"></div>
+    <div id="cubes">cubes</div>
+    <div id="spheres">spheres</div>
+    <div id="bars">bars</div>
+    <div id="planes">planes</div>
+
+
+    <script>
         const container = document.body;
-        const width = window.innerWidth;  
+        const width = window.innerWidth;
         const height = window.innerHeight;
 
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
 
         var cubes = [];
-        var curType = '';
+        var curLayout = '';
 
         var sphereGridGroup = new THREE.Group();
         var barGridGroup = new THREE.Group();
@@ -117,9 +134,10 @@
 
         var quadrant;
 
-        var curTypeMap = {};
+        var curLayoutMap = {};
+        var timer;
 
-        const texture = new THREE.TextureLoader().load( './china.jpg' );
+        const texture = new THREE.TextureLoader().load('./china.jpg');
 
         var res = []; // 二维数组
 
@@ -128,16 +146,16 @@
             stats = new Stats();
             document.body.appendChild(stats.dom);
         }
-        function initOrthCamera(){
-            camera = new THREE.PerspectiveCamera(45, width/height, 1, 100000);
-            camera.position.set(800,1500, 1500);//设置相机坐标
-            camera.lookAt({x: 0, y: 0, z: 0});//让相机指向场景中心
+        function initOrthCamera() {
+            camera = new THREE.PerspectiveCamera(45, width / height, 1, 100000);
+            camera.position.set(800, 1500, 1500);//设置相机坐标
+            camera.lookAt({ x: 0, y: 0, z: 0 });//让相机指向场景中心
         }
 
         function initLight() {
             scene.add(new THREE.AmbientLight(0x444444));
             light = new THREE.DirectionalLight(0xffffff);
-            light.position.set(15,50,10);
+            light.position.set(15, 50, 10);
             //告诉平行光需要开启阴影投射
 
             light.castShadow = true;
@@ -145,14 +163,15 @@
         }
         function animate() {
             const vector = camera.getWorldDirection(new THREE.Vector3());
-            const curquadrant = getQuadrant(0, 0, vector.x,vector.z)
+            const curquadrant = helperMethods.getQuadrant(0, 0, vector.x, vector.z);
+            const curhorquadrant = helperMethods.getQuadrant(0, 0, vector.z, vector.y);
+            // console.log(curhorquadrant)
             if (curquadrant !== quadrant) {
                 quadrant = curquadrant;
-                console.log(quadrant)
-                Object.values(curTypeMap).forEach(row => row.updateText(quadrant));
+                Object.values(curLayoutMap).forEach(row => row.updateText(quadrant));
             }
             stats.update();
-            requestAnimationFrame( animate );
+            requestAnimationFrame(animate);
             renderer.render(scene, camera);
         }
 
@@ -160,21 +179,21 @@
             initStats();
             initOrthCamera();
             scene = new THREE.Scene();      //创建场景  
-            scene.background = new THREE.Color( 0x000000 );
+            scene.background = new THREE.Color(0x000000);
             scene.translateX(- width / 4);
             scene.translateY(height / 4);
             initLight();
-            renderer = new THREE.WebGLRenderer({antialias : true, logarithmicDepthBuffer: true});     //创建渲染器（并设置抗锯齿属性）
+            renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });     //创建渲染器（并设置抗锯齿属性）
             renderer.setSize(width, height);    //设置渲染器的大小
             container.appendChild(renderer.domElement);
-            controls = new THREE.OrbitControls( camera, renderer.domElement );
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.screenSpacePanning = true;
-            window.addEventListener('resize', function(){
+            window.addEventListener('resize', function () {
                 renderer.setSize(window.innerWidth, window.innerHeight);
             })
             const vector = camera.getWorldDirection(new THREE.Vector3());
-            quadrant = getQuadrant(0, 0, vector.x,vector.z)
-            
+            quadrant = helperMethods.getQuadrant(0, 0, vector.x, vector.z)
+
             // mousemove事件
             const tooltipPosition = {};
             let intersects = [];
@@ -183,8 +202,8 @@
             document.addEventListener('mousemove', onmouseOver, false);
 
             function onmouseOver(event) {
-                mouse.x = ( event.clientX / width ) * 2 - 1;
-                mouse.y = - ( event.clientY / height ) * 2 + 1;
+                mouse.x = (event.clientX / width) * 2 - 1;
+                mouse.y = - (event.clientY / height) * 2 + 1;
                 tooltipPosition.x = event.clientX + 'px';
                 tooltipPosition.y = event.clientY + 'px';
                 getIntersectObjects();
@@ -195,36 +214,36 @@
                 intersects = raycaster.intersectObjects(scene.children, true);
                 if (intersects.length) {
                     if (intersects[0].object.customType === 'cube' && INTERSECTED !== intersects[0].object) {
-                        if (INTERSECTED) INTERSECTED.material.color.set( INTERSECTED.currentColor );
+                        if (INTERSECTED) INTERSECTED.material.color.set(INTERSECTED.currentColor);
                         INTERSECTED = intersects[0].object;
                         INTERSECTED.currentColor = JSON.parse(JSON.stringify(INTERSECTED.material.color));
-                        INTERSECTED.material.color.set( 0xff0000 );
+                        INTERSECTED.material.color.set(0xff0000);
                         tooltip.innerHTML = INTERSECTED.customName + '-' + INTERSECTED.customLon + '-' + INTERSECTED.customLat;
                         tooltip.style.left = tooltipPosition ? tooltipPosition.x : '';
                         tooltip.style.top = tooltipPosition ? tooltipPosition.y : '';
                         tooltip.style.display = 'block';
                     }
                 } else {
-                    if (INTERSECTED) INTERSECTED.material.color.set( INTERSECTED.currentColor );
-                        tooltip.style.display = 'none';
+                    if (INTERSECTED) INTERSECTED.material.color.set(INTERSECTED.currentColor);
+                    tooltip.style.display = 'none';
                 }
             }
             queue().defer(d3.csv, "./bank.csv").await(ready);
-            animate(); 
+            animate();
         }
 
         init();
         function ready(error, data) {
             let temp = {};
-            const maxLat = Math.max(...(data.map(row => row.latitude)));
-            const minLat = Math.min(...(data.map(row => row.latitude)));
-            const maxLon = Math.max(...(data.map(row => row.longitude)));
-            const minLon = Math.min(...(data.map(row => row.longitude)));
-            scaleLinearLat = d3.scaleLinear().domain([maxLat, minLat]).range([0, cubeAxis.zAxis]);
-            scaleLinearLon = d3.scaleLinear().domain([minLon, maxLon]).range([0, cubeAxis.xAxis]);
-            scaleTime = d3.scaleTime().range([0, 600]).domain((d3.extent(data, function(d) { return new Date(d.date); })))
+            const [ minLat, maxLat ] = d3.extent(data.map(row => +row.latitude));
+            const [ minLon, maxLon ] = d3.extent(data.map(row => +row.longitude));
 
             const { xAxis, yAxis, zAxis } = cubeAxis;
+
+            scaleLinearLat = d3.scaleLinear().domain([maxLat, minLat]).range([0, zAxis]);
+            scaleLinearLon = d3.scaleLinear().domain([minLon, maxLon]).range([0, xAxis]);
+            scaleTime = d3.scaleTime().range([0, 600]).domain((d3.extent(data, function (d) { return new Date(d.date); })))
+
             const density = 10;
             cubeX = density;
             cubeZ = density;
@@ -251,6 +270,7 @@
                 }
             })
             Object.values(temp).map(row => res.push(row));
+            console.log(temp)
             maxCount = Math.max(...(Object.values(temp).map(row => row.length)));
             cubeY = 400 / maxCount;
             if (cubeY < density) {
@@ -299,90 +319,91 @@
             barAxis.scaleX = i => i + 1;
 
             const cubesButton = document.getElementById('cubes');
-            cubesButton.addEventListener('click', () => transGroup('cubes'), false);
+            cubesButton.addEventListener('click', () => transform('cubes'), false);
             const spheresButton = document.getElementById('spheres');
-            spheresButton.addEventListener('click', () => transGroup('spheres'), false);
+            spheresButton.addEventListener('click', () => transform('spheres'), false);
             const barsButton = document.getElementById('bars');
-            barsButton.addEventListener('click', () => transGroup('bars'), false);
+            barsButton.addEventListener('click', () => transform('bars'), false);
             const planesButton = document.getElementById('planes');
-            planesButton.addEventListener('click', () => transGroup('planes'), false);
+            planesButton.addEventListener('click', () => transform('planes'), false);
 
-            curTypeMap.planes = new PlaneText(planeAxis, quadrant);
-            curTypeMap.cubes = new CubeText(cubeAxis, quadrant);
-            curTypeMap.bars = new BarText(barAxis, quadrant);
-            curTypeMap.spheres = new SphereText(sphereAxis, quadrant);
+            curLayoutMap.planes = new PlaneText(planeAxis, quadrant);
+            curLayoutMap.cubes = new CubeText(cubeAxis, quadrant);
+            curLayoutMap.bars = new BarText(barAxis, quadrant);
+            curLayoutMap.spheres = new SphereText(sphereAxis, quadrant);
 
-            function transGroup(to) {
-                if (curType === to) {
+            function setData(d, i) {
+                const { date, longitude, latitude } = data[i];
+                const sphere = new THREE.Object3D()
+                sphere.position.x = scaleLinearLon(longitude)
+                sphere.position.y = scaleTime(new Date(date)) + cubeY
+                sphere.position.z = scaleLinearLat(latitude)
+
+                d.spheres = sphere
+
+                const bar = new THREE.Object3D()
+
+                const { perCount, bandWidth } = barAxis;
+                bar.position.x = cubes[i].index % perCount * cubeX + cubeX / 2 + cubes[i].month * (cubeX * perCount + bandWidth) + bandWidth / 2
+                bar.position.y = ~~(cubes[i].index / perCount) * cubeY + cubeY / 2
+                bar.position.z = cubeZ / 2
+
+                d.bars = bar
+
+                const cube = new THREE.Object3D()
+                cube.position.x = res[cubes[i].i][cubes[i].j].centerPos.x
+                cube.position.y = cubes[i].j * cubeY + cubeY / 2
+                cube.position.z = res[cubes[i].i][cubes[i].j].centerPos.z
+
+                d.cubes = cube
+
+                const plane = new THREE.Object3D()
+                plane.position.x = scaleLinearLon(res[cubes[i].i][cubes[i].j].longitude)
+                plane.position.y = cubeY / 2
+                plane.position.z = scaleLinearLat(res[cubes[i].i][cubes[i].j].latitude)
+
+                d.planes = plane
+            }
+            function transform(layout) {
+                if (curLayout === layout) {
                     return;
                 } else {
-                    removeText(cubeGridGroup);
-                    removeText(barGridGroup);
-                    removeText(sphereGridGroup);
-                    removeText(planeGridGroup);
+                    Object.values(curLayoutMap).forEach(row => removeText(row.group));
                     const len = cubes.length;
-                    let count = 0;
-                    if (to === 'spheres') {
-                        for(let i = 0; i < len; i ++) {
-                            const { date, longitude, latitude } = data[i];
-                            new TweenMax.to(cubes[i].position, 1, {
-                                y: scaleTime(new Date(date)) + cubeY,
-                                z: scaleLinearLat(latitude),
-                                x: scaleLinearLon(longitude),
-                                onComplete: () => {
-                                    count += 1;
-                                    if (count === len) {
-                                        showText(sphereGridGroup);
-                                    }
-                                }
-                            });
-                        }
-                    } else if(to === 'bars') {
-                        const { perCount, bandWidth } = barAxis;
-                        for(let i = 0; i < len; i ++) {
-                            new TweenMax.to(cubes[i].position, 1, {
-                                y: ~~(cubes[i].index / perCount) * cubeY + cubeY / 2,
-                                z: cubeZ / 2,
-                                x: cubes[i].index % perCount * cubeX + cubeX / 2 + cubes[i].month * (cubeX * perCount + bandWidth) + bandWidth / 2,
-                                onComplete: () => {
-                                    count += 1;
-                                    if (count === len) {
-                                        showText(barGridGroup);
-                                    }
-                                }
-                            });
-                        }
-                    } else if (to === 'planes') {
-                        for(let i = 0; i < len; i ++) {
-                            const { date, longitude, latitude } = data[i];
-                            new TweenMax.to(cubes[i].position, 1, {
-                                y: cubeY / 2,
-                                z: scaleLinearLat(res[cubes[i].i][cubes[i].j].latitude),
-                                x: scaleLinearLon(res[cubes[i].i][cubes[i].j].longitude),
-                                onComplete: () => {
-                                    count += 1;
-                                    if (count === len) {
-                                        showText(planeGridGroup);
-                                    }
-                                }
-                            });
-                        }
-                    } else {
-                        for(let i = 0; i < len; i ++) {
-                            new TweenMax.to(cubes[i].position, 1, {
-                                y: cubes[i].j * cubeY + cubeY / 2,
-                                z: res[cubes[i].i][cubes[i].j].centerPos.z,
-                                x: res[cubes[i].i][cubes[i].j].centerPos.x,
-                                onComplete: () => {
-                                    count += 1;
-                                    if (count === len) {
-                                        showText(cubeGridGroup);
-                                    }
-                                }
-                            });
-                        }
+                    const duration = 1000
+
+                    if (timer) {
+                        timer.stop()
                     }
-                    curType = to;
+                    var tweens = [];
+                    cubes.forEach(d => {
+                        const { position, rotation } = d;
+                        const ip = d3.interpolateArray(
+                            position.toArray(),
+                            d[layout].position.toArray(),
+                        )
+                        tweens.push(function chartTween(t) {
+                            position.set(...ip(t))
+                        })
+                    })
+                    const count = tweens.length
+
+                    timer = d3.timer(function tweenCharts(t) {
+                        const p = Math.min(t / duration, 1)
+
+                        for (let i = 0; i < count; i++) {
+                            tweens[i](p)
+                        }
+
+                        renderer.render(scene, camera)
+
+                        if (t > duration) {
+                            timer.stop()
+                            showText(curLayoutMap[layout].group);
+                            renderer.render(scene, camera)
+                        }
+                    })
+                    curLayout = layout;
                 }
             }
             function initCube(item, i, j) {
@@ -397,15 +418,18 @@
                 cube1.customLon = item.longitude;
                 item.centerPos.y = j * cubeY + cubeY / 2;
 
-                var helper = new THREE.BoxHelper( cube1 );
-                helper.material.color.set( 0x0be064 );
+                var helper = new THREE.BoxHelper(cube1);
+                helper.material.color.set(0x0be064);
 
                 const cubeGroup = new THREE.Object3D();
                 cubeGroup.add(cube1, helper);
                 // cubeGroup.position.z = item.centerPos.z;
                 // cubeGroup.position.x = item.centerPos.x;
-                cubeGroup.position.z = scaleLinearLat(item.latitude);
-                cubeGroup.position.x = scaleLinearLon(item.longitude);
+                // cubeGroup.position.z = scaleLinearLat(item.latitude);
+                // cubeGroup.position.x = scaleLinearLon(item.longitude);
+                // cubeGroup.position.y = cubeY / 2;
+                cubeGroup.position.z = Math.random() * zAxis / 2 + zAxis / 2;
+                cubeGroup.position.x = Math.random() * xAxis / 2 + xAxis / 2;
                 cubeGroup.position.y = cubeY / 2;
 
                 cubeGroup.i = i;
@@ -417,19 +441,18 @@
             }
             function initCubes() {
                 const resLen = res.length;
-                for (let i = 0; i < resLen; i ++) {
-                    for (let j = 0; j < res[i].length; j ++) {
+                for (let i = 0; i < resLen; i++) {
+                    for (let j = 0; j < res[i].length; j++) {
                         initCube(res[i][j], i, j);
                     }
                 }
-                curType = 'planes';
-                showText(planeGridGroup)
             }
-            
+
             initCubes();
+            cubes.forEach(setData);
+            transform('cubes');
         }
+    </script>
+</body>
 
-
-        </script>  
-    </body>  
-</html>  
+</html>
