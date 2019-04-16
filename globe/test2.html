@@ -1,0 +1,612 @@
+<html>
+
+<head>
+    <title>Three js Line</title>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%
+        }
+    </style>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="https://d3js.org/d3-array.v1.min.js"></script>
+    <script src="https://d3js.org/d3-geo.v1.min.js"></script>
+    <script src="https://d3js.org/d3-geo-projection.v2.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/16.3.5/Tween.min.js"></script>
+    <script src="../third/three.min.js"></script>
+    <script src="../third/TrackballControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/1.6.20/topojson.min.js"></script>
+    <script src="../third/d3threeD.js"></script>
+    <script src="../third/PinchZoomControls.js"></script>
+    <script src="../third/Projector.js"></script>
+    <script src="../third/jquery-3.1.1.min.js"></script>
+</head>
+
+<body>
+    <div id="view_switch_flat">平面</div>
+    <div id="view_switch_spherical">球面</div>
+    <script>
+        THREE.Vector3.prototype.mix = function(v2, factor) {
+            this.x = this.x + (v2.x - this.x) * factor;
+            this.y = this.y + (v2.y - this.y) * factor;
+            this.z = this.z + (v2.z - this.z) * factor;
+        };
+        var mouseNormalized = new THREE.Vector3( 0, 0, 1 );
+        var mouse = new THREE.Vector2();
+        var worldmap;
+        var Config = {
+            cameraDistance: 500,
+            cameraDistanceMin: 30,
+            cameraDistanceMax: 10000,
+            cameraDistanceMin2D: 30,
+            globeRotationX: -2.25,
+            globeRotationY: 1.7,
+            globeRadius: 180,
+            introRotateDuration: 4000,
+            introWarpDelay: 2000,
+            introWarpDuration: 2500,
+            viewSwitchDuration: 800,
+            materialCountryBorder: new THREE.LineBasicMaterial( { color: 0xFFFFFF, linewidth: 1.5 } ),
+            mapOffsetX: -540, // -500
+            mapOffsetY: 200, // 160
+            far: 20000,
+            near: 0.1,
+            fov: 60
+        }
+        function WorldMap() {
+            this.viewMode = '2d';
+            this.mouse = new THREE.Vector2();
+            this.raycaster = new THREE.Raycaster();
+            this.intersectedObject = null;
+            this.countryBorder = null;
+            this.introRunning = true;
+
+            let _d3threeD = {};
+            d3threeD(_d3threeD);
+            this.transformSVGPath = _d3threeD.transformSVGPath;
+
+            this.dataCountries = [];
+            this.countriesObject3D = null;
+            this.geometryNeedsUpdate = false;
+
+            this.animationProps = {
+                interpolatePos: 0.0,
+                lineAnimatePos: 0.0,
+                lineAnimateOffset: 0.0,
+                colorChangeID: 0
+            };
+            this.inited = false;
+            this.trianglesNumTotal = 0;
+        }
+        WorldMap.prototype = {
+            init: function() {
+                const aspect = window.innerWidth / window.innerHeight;
+                this.camera = new THREE.PerspectiveCamera(Config.fov, aspect, Config.near, Config.far);
+                this.camera.position.set(0, 0, Config.cameraDistance);
+                this.camera.lookAt({ x: 0, y: 0, z: 0 });//让相机指向场景中心
+
+                this.renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: false });     //创建渲染器（并设置抗锯齿属性）
+                this.renderer.setSize(window.innerWidth, window.innerHeight);    //设置渲染器的大小
+                document.body.appendChild(this.renderer.domElement);
+                this.initControls();
+                this.init3D();
+                this.scene = new THREE.Scene();
+                this.scene.add( new THREE.AmbientLight( 0xffffff ) );
+                pointLight = new THREE.PointLight(0x000000);
+                pointLight.position.x = 0.0;
+                pointLight.position.y = 500.0;
+                pointLight.position.z = 1000.0;
+                pointLight.intensity = 1.0;
+                this.scene.add(pointLight);
+                const that = this;
+                this.inited = true;
+
+                d3.json('./js/country_data.json', function(error, data) {
+                    that.dataCountries = data;
+                    that.completeInit();
+                })
+            },
+            animate: function() {
+                if (!this.introRunning) {
+                    var intersects = getIntersects(this, mouseNormalized);
+                    if( intersects.length > 0 ) {
+                        if( this.intersectedObject !== intersects[ 0 ].object) {
+                            this.clearCountryHover();
+                            if(intersects[ 0 ].object.name !== 'sphere') {
+                                this.intersectedObject = intersects[ 0 ].object;
+                            }
+                            var country = intersects[ 0 ].object.countryObject;
+                            this.updateCountryHover(country);
+                        }
+
+                    }
+                } else {
+                    this.clearCountryHover();
+                }
+                if(this.geometryNeedsUpdate) {
+                    updateCountriesGeometry(this);
+                    updateCountriesBufferGeometry(this);
+                }
+            },
+            init3D: function () {
+                this.geo = {};
+                this.geo.projection = d3.geoRobinson();
+                this.geo.path = d3.geoPath().projection(this.geo.projection);
+            },
+            initControls: function() {
+                controlsTrackball = new THREE.TrackballControls( this.camera, this.renderer.domElement );
+                controlsTrackball.rotateSpeed = 0.5; // 1.0
+                controlsTrackball.zoomSpeed = 1.0;
+                controlsTrackball.panSpeed = 0.25;
+
+                controlsTrackball.noRotate = false;
+                controlsTrackball.noZoom = false;
+                controlsTrackball.noPan = true;
+
+                controlsTrackball.staticMoving = false;
+                controlsTrackball.dynamicDampingFactor = 0.2;
+
+                controlsTrackball.minDistance = Config.cameraDistanceMin;
+                controlsTrackball.maxDistance = Config.cameraDistanceMax;
+
+                controlsTrackball.keys = []; // [ 65 // A, 83 // S, 68 // D ]; // [ rotateKey, zoomKey, panKey ]
+                controlsTrackball.enabled = false;
+
+                controlsPinchZoom = new THREE.PinchZoomControls( this.camera, this.renderer.domElement );
+                controlsPinchZoom.staticMoving = true;
+                controlsPinchZoom.minDistance = Config.cameraDistanceMin2D;
+                controlsPinchZoom.maxDistance = Config.cameraDistanceMax;
+                controlsPinchZoom.enabled = false;
+
+                this.controls = controlsPinchZoom;
+            },
+            completeInit: function () {
+                this.createCountries();
+                document.body.addEventListener('mousemove', onMouseMove);
+                render();
+            },
+            clearCountryHover: function() {
+                if(this.countryBorder) {
+                    this.scene.remove(this.countryBorder);
+                    this.countryBorder = null;
+                }
+                if(this.intersectedObject !== undefined && this.intersectedObject !== null) {
+                    if(this.intersectedObject.countryObject.listItem !== undefined) this.intersectedObject.countryObject.listItem.removeClass('hover');
+                }
+                this.intersectedObject = null;
+            },
+            updateCountryHover: function (country) {
+                this.intersectedObject = country.mesh;
+
+                if(this.countryBorder) {
+                    this.scene.remove(this.countryBorder);
+                }
+
+                if(this.viewMode === '3d') {
+                    this.countryBorder = country.border3D;
+                } else {
+                    this.countryBorder = country.border2D;
+                }
+                this.scene.add(this.countryBorder);
+            },
+            createCountries: function() {
+                this.animationProps.interpolatePos = 1.0;
+                const that = this;
+                createCountriesGeometry(this);
+                updateCountriesGeometry(this, true);
+                createCountriesBufferGeometry(this);
+                updateCountriesBufferGeometry(this);
+                window.setTimeout(function() {
+                    var scaleFinal = 1.0; // has to be one for the picking to work properly in combination with buffer geometry
+                    tweenScale = new TWEEN.Tween(that.countriesObject3D.scale)
+                        .to({x: scaleFinal, y: scaleFinal, z: scaleFinal}, Config.introRotateDuration) // 3500
+                        .delay(0)
+                        .onUpdate(function() {
+                            that.geometryNeedsUpdate = true;
+                        })
+                        .easing(TWEEN.Easing.Quadratic.Out)
+                        .start();
+                    tweenWarp = new TWEEN.Tween(that.animationProps)
+                        .to({interpolatePos: 0.0}, Config.introWarpDuration)
+                        .delay(Config.introWarpDelay)
+                        .easing(TWEEN.Easing.Exponential.InOut)
+                        .onUpdate(function() {
+                            that.geometryNeedsUpdate = true;
+                        })
+                        .onComplete(function() {
+                            that.geometryNeedsUpdate = true;
+                            that.introRunning = false;
+                            that.controls.enabled = true;
+                        }).start();
+
+                    tweenRotation = new TWEEN.Tween(that.countriesObject3D.rotation)
+                        .to({ _y: 0 }, Config.introRotateDuration) // 3500
+                        .delay(0)
+                        .easing(TWEEN.Easing.Quintic.Out)
+                        .onUpdate(function() {
+                            that.geometryNeedsUpdate = true;
+                        })
+                        .start();
+                }, 100);
+
+            }
+        }
+        worldMap = new WorldMap();
+        worldMap.init();
+        function render() {
+            requestAnimationFrame(render);
+            if (worldMap.inited) {
+                worldMap.geometryNeedsUpdate = false;
+            }
+            worldMap.controls.update();
+            TWEEN.update();
+            if (worldMap.inited) {
+                worldMap.animate();
+            }
+            worldMap.renderer.render(worldMap.scene, worldMap.camera);
+        }
+        
+        function onMouseMove(event) {
+            event.preventDefault();
+
+            mouse.x = event.clientX;
+            mouse.y = event.clientY;
+
+            var viewportWidth = $(window).width();
+            var viewportHeight = $(window).height();
+
+            mouseNormalized.x = ( event.clientX / viewportWidth ) * 2 - 1;
+            mouseNormalized.y = -( event.clientY / viewportHeight ) * 2 + 1;
+        }
+        function getIntersects(worldmap, mouseNormalized) {
+            worldmap.raycaster.setFromCamera(mouseNormalized, worldmap.camera);
+
+            var intersects = worldmap.raycaster.intersectObjects(worldmap.countriesObject3D.children);
+
+            return intersects;
+        }
+        
+        function createCountriesGeometry(worldmap) {
+            worldmap.countriesObject3D = new THREE.Object3D();
+            worldmap.countries = [];
+
+            var m = new THREE.Matrix4();
+            var m1 = new THREE.Matrix4();
+            var m2 = new THREE.Matrix4();
+            m1.makeRotationX( Config.globeRotationX );
+            m2.makeRotationY( Config.globeRotationY );
+            m.multiplyMatrices( m1, m2 );
+
+            for(i = 0; i < worldmap.dataCountries.features.length; i++) {
+                var feature = worldmap.dataCountries.features[i];
+
+                if(feature.properties.NAME !== 'Antarctica') { //  && feature.properties.name === 'Germany'
+                // convert SVG data to three.js Shapes array (all shapes in one country):
+                    
+                    var t = worldmap.geo.path(feature);
+
+                    if(t !== undefined) {
+                        var shapes = worldmap.transformSVGPath( t );
+                        var country = {
+                            name: feature.properties.NAME_LONG,
+                            properties: feature.properties,
+                            shapes,
+                            color: new THREE.Color(0x777777),
+                            colorLast: new THREE.Color(0x777777)
+                        };
+
+                        worldmap.countries.push(country);
+                    }
+                }
+            }
+            for(i = 0; i < worldmap.countries.length; i++) {
+                worldmap.countries[i].geometry = new THREE.ShapeGeometry( worldmap.countries[i].shapes );
+
+                worldmap.countries[i].geometry2D = worldmap.countries[i].geometry.clone();
+                for(k = 0; k < worldmap.countries[i].geometry2D.vertices.length; k++) {
+                    worldmap.countries[i].geometry2D.vertices[k].x += -540;
+                    worldmap.countries[i].geometry2D.vertices[k].y = -worldmap.countries[i].geometry2D.vertices[k].y + 200;
+                }
+                worldmap.trianglesNumTotal += worldmap.countries[i].geometry.faces.length;
+
+                worldmap.countries[i].border2D = new THREE.Object3D();
+                for(var s = 0; s < worldmap.countries[i].shapes.length; s++) {
+                    var pointsGeometry = worldmap.countries[i].shapes[s].createPointsGeometry();
+                    for(k = 0; k < pointsGeometry.vertices.length; k++) {
+                        pointsGeometry.vertices[k].x += Config.mapOffsetX;
+                        pointsGeometry.vertices[k].y = -pointsGeometry.vertices[k].y + Config.mapOffsetY;
+                        pointsGeometry.vertices[k].z += 0.1;
+                    }
+                    worldmap.countries[i].border2D.add(new THREE.Line( pointsGeometry, Config.materialCountryBorder ));
+                }
+
+                worldmap.countries[i].geometry3D = worldmap.countries[i].geometry.clone();
+                for(k = 0; k < worldmap.countries[i].geometry.vertices.length; k++) {
+                    var spherical = worldmap.geo.projection.invert([worldmap.countries[i].geometry.vertices[k].x, worldmap.countries[i].geometry.vertices[k].y]);
+                    spherical[0] = THREE.Math.degToRad(spherical[0]);
+                    spherical[1] = THREE.Math.degToRad(spherical[1]);
+
+                    worldmap.countries[i].geometry3D.vertices[k].x = Config.globeRadius * Math.cos(spherical[0]) * Math.cos(spherical[1]);
+                    worldmap.countries[i].geometry3D.vertices[k].y = -Config.globeRadius * Math.sin(spherical[1]);
+                    worldmap.countries[i].geometry3D.vertices[k].z = Config.globeRadius * Math.sin(spherical[0]) * Math.cos(spherical[1]);
+                    worldmap.countries[i].geometry3D.vertices[k].multiplyScalar(1.002);
+                }
+
+                worldmap.countries[i].geometry3D.applyMatrix(m);
+
+                worldmap.countries[i].border3D = new THREE.Object3D();
+                for(s = 0; s < worldmap.countries[i].shapes.length; s++) {
+                    pointsGeometry = worldmap.countries[i].shapes[s].createPointsGeometry();
+                    for(k = 0; k < pointsGeometry.vertices.length; k++) {
+                        spherical = worldmap.geo.projection.invert([pointsGeometry.vertices[k].x, pointsGeometry.vertices[k].y]);
+
+                        spherical[0] = THREE.Math.degToRad(spherical[0]);
+                        spherical[1] = THREE.Math.degToRad(spherical[1]);
+
+                        pointsGeometry.vertices[k].x = Config.globeRadius * Math.cos(spherical[0]) * Math.cos(spherical[1]);
+                        pointsGeometry.vertices[k].y = -Config.globeRadius * Math.sin(spherical[1]);
+                        pointsGeometry.vertices[k].z = Config.globeRadius * Math.sin(spherical[0]) * Math.cos(spherical[1]);
+
+                        pointsGeometry.vertices[k].multiplyScalar(1.001); // 1.004
+                    }
+                    worldmap.countries[i].border3D.add(new THREE.Line( pointsGeometry, Config.materialCountryBorder ));
+                }
+                // rotate and bake transform into vertices:
+                worldmap.countries[i].border3D.applyMatrix(m);
+                
+                worldmap.countries[i].mesh = new THREE.Mesh(worldmap.countries[i].geometry, new THREE.MeshPhongMaterial({
+                    color: 0x777777,
+                    side: THREE.DoubleSide
+                }));
+                worldmap.countries[i].mesh.countryObject = worldmap.countries[i];
+                worldmap.countriesObject3D.add(worldmap.countries[i].mesh);
+            }
+            
+            var scaleStart = 0.0;
+            worldmap.countriesObject3D.scale.set(scaleStart, scaleStart, scaleStart);
+            worldmap.countriesObject3D.rotation._y = -Math.PI * 6; // 不知道为什么要使用_y
+        }
+        function updateCountriesGeometry(worldmap, computeFaceNormals = false) {
+            var i;
+            var k;
+            for(i = 0; i < worldmap.countries.length; i++) {
+                for(k = 0; k < worldmap.countries[i].geometry.vertices.length; k++) {
+                    worldmap.countries[i].geometry.vertices[k].copy(worldmap.countries[i].geometry2D.vertices[k]);
+                    worldmap.countries[i].geometry.vertices[k].mix(worldmap.countries[i].geometry3D.vertices[k], worldmap.animationProps.interpolatePos);
+                }
+                worldmap.countries[i].geometry.computeBoundingSphere(); // required for picking to work after updating vertices
+                if(computeFaceNormals) worldmap.countries[i].geometry.computeFaceNormals(); // required for shading to look correct
+            }
+        }
+        function createCountriesBufferGeometry(worldmap) {
+            worldmap.bufferGeometry = new THREE.BufferGeometry();
+            var positions = new Float32Array( worldmap.trianglesNumTotal * 3 * 3 );
+            var normals = new Float32Array( worldmap.trianglesNumTotal * 3 * 3 );
+            var colors = new Float32Array( worldmap.trianglesNumTotal * 3 * 3 );
+
+            var color = new THREE.Color(0x777777);
+
+            var index = 0;
+            var i, f;
+            for(i = 0; i < worldmap.countries.length; i++) {
+                var vertices = worldmap.countries[i].geometry.vertices;
+
+                for(f = 0; f < worldmap.countries[i].geometry.faces.length; f++) {
+                var face = worldmap.countries[i].geometry.faces[f];
+
+                // positions
+
+                positions[ index ] = vertices[ face.a ].x;
+                positions[ index + 1 ] = vertices[ face.a ].y;
+                positions[ index + 2 ] = vertices[ face.a ].z;
+
+                positions[ index + 3 ] = vertices[ face.b ].x;
+                positions[ index + 4 ] = vertices[ face.b ].y;
+                positions[ index + 5 ] = vertices[ face.b ].z;
+
+                positions[ index + 6 ] = vertices[ face.c ].x;
+                positions[ index + 7 ] = vertices[ face.c ].y;
+                positions[ index + 8 ] = vertices[ face.c ].z;
+
+                // normals
+
+                normals[ index ] = face.normal.x;
+                normals[ index + 1 ] = face.normal.y;
+                normals[ index + 2 ] = face.normal.z;
+
+                normals[ index + 3 ] = face.normal.x;
+                normals[ index + 4 ] = face.normal.y;
+                normals[ index + 5 ] = face.normal.z;
+
+                normals[ index + 6 ] = face.normal.x;
+                normals[ index + 7 ] = face.normal.y;
+                normals[ index + 8 ] = face.normal.z;
+
+                // colors
+
+                colors[ index ] = color.r;
+                colors[ index + 1 ] = color.g;
+                colors[ index + 2 ] = color.b;
+
+                colors[ index + 3 ] = color.r;
+                colors[ index + 4 ] = color.g;
+                colors[ index + 5 ] = color.b;
+
+                colors[ index + 6 ] = color.r;
+                colors[ index + 7 ] = color.g;
+                colors[ index + 8 ] = color.b;
+
+                index += 9;
+
+                }
+            } // for countries.length buffer geometry creation end
+
+            worldmap.bufferGeometry.addAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
+            worldmap.bufferGeometry.addAttribute( 'normal', new THREE.BufferAttribute( normals, 3 ) );
+            worldmap.bufferGeometry.addAttribute( 'color', new THREE.BufferAttribute( colors, 3 ) );
+
+            worldmap.bufferGeometry.verticesNeedUpdate = true;
+            worldmap.bufferGeometry.computeBoundingSphere();
+
+            var mesh = new THREE.Mesh(worldmap.bufferGeometry, 
+            new THREE.MeshPhongMaterial( { color: 0xFFFFFF, specular: 0xFFFFFF, shininess: 5, 
+                transparent: true, opacity: 0.9, side: THREE.DoubleSide, vertexColors: THREE.VertexColors } ));
+            worldmap.scene.add( mesh );
+        };
+
+        function updateCountriesBufferGeometry(worldmap) {
+            var positions = worldmap.bufferGeometry.getAttribute( 'position' ).array;
+            var normals = worldmap.bufferGeometry.getAttribute( 'normal' ).array;
+            var colors = worldmap.bufferGeometry.getAttribute( 'color' ).array;
+
+            var m = new THREE.Matrix4();
+            var m1 = new THREE.Matrix4();
+            var m2 = new THREE.Matrix4();
+            m1.makeRotationY( worldmap.countriesObject3D.rotation._y );
+            m2.makeScale( worldmap.countriesObject3D.scale.x, worldmap.countriesObject3D.scale.y, worldmap.countriesObject3D.scale.z );
+            m.multiplyMatrices( m1, m2 );
+
+            var color = new THREE.Color();
+            var v = new THREE.Vector3();
+
+            var index = 0;
+            var i, f;
+            for(i = 0; i < worldmap.countries.length; i++) {
+                var vertices = worldmap.countries[i].geometry.vertices;
+
+                color.set(worldmap.countries[i].color);
+
+                for(f = 0; f < worldmap.countries[i].geometry.faces.length; f++) {
+                var face = worldmap.countries[i].geometry.faces[f];
+
+                // positions
+
+                v.copy( vertices[ face.a ] );
+                v.applyMatrix4(m);
+
+                positions[ index ] = v.x;
+                positions[ index + 1 ] = v.y;
+                positions[ index + 2 ] = v.z;
+
+                v.copy( vertices[ face.b ] );
+                v.applyMatrix4(m);
+
+                positions[ index + 3 ] = v.x;
+                positions[ index + 4 ] = v.y;
+                positions[ index + 5 ] = v.z;
+
+                v.copy( vertices[ face.c ] );
+                v.applyMatrix4(m);
+
+                positions[ index + 6 ] = v.x;
+                positions[ index + 7 ] = v.y;
+                positions[ index + 8 ] = v.z;
+
+                // normals
+
+                normals[ index ] = face.normal.x;
+                normals[ index + 1 ] = face.normal.y;
+                normals[ index + 2 ] = face.normal.z;
+
+                normals[ index + 3 ] = face.normal.x;
+                normals[ index + 4 ] = face.normal.y;
+                normals[ index + 5 ] = face.normal.z;
+
+                normals[ index + 6 ] = face.normal.x;
+                normals[ index + 7 ] = face.normal.y;
+                normals[ index + 8 ] = face.normal.z;
+
+                // colors
+
+                colors[ index ] = color.r;
+                colors[ index + 1 ] = color.g;
+                colors[ index + 2 ] = color.b;
+
+                colors[ index + 3 ] = color.r;
+                colors[ index + 4 ] = color.g;
+                colors[ index + 5 ] = color.b;
+
+                colors[ index + 6 ] = color.r;
+                colors[ index + 7 ] = color.g;
+                colors[ index + 8 ] = color.b;
+
+                index += 9;
+
+                }
+            }
+            worldmap.bufferGeometry.attributes.position.needsUpdate = true;
+            worldmap.bufferGeometry.attributes.normal.needsUpdate = true;
+            worldmap.bufferGeometry.attributes.color.needsUpdate = true;
+            worldmap.bufferGeometry.computeBoundingSphere();
+
+        };
+        initViewSwitch(worldMap);
+        function initViewSwitch(worldmap) {
+            $('#view_switch_flat').click(function(event) {
+                worldmap.viewMode = '2d';
+
+                worldmap.controls.enabled = false;
+
+                tweenSwitch = new TWEEN.Tween(worldmap.animationProps)
+                .to({interpolatePos: 0.0}, Config.viewSwitchDuration)
+                .onUpdate(function() {
+                    worldmap.geometryNeedsUpdate = true;
+                    worldmap.introRunning = true;
+                })
+                .onComplete(function() {
+                    worldmap.controls = controlsPinchZoom;
+                    worldmap.controls.enabled = true;
+                    worldmap.introRunning = false;
+                })
+                .easing(TWEEN.Easing.Cubic.Out)
+                .start();
+
+                tweenCameraPosition = new TWEEN.Tween(worldmap.camera.position)
+                .to({ x: 0, y: 0, z: Config.cameraDistance }, Config.viewSwitchDuration)
+                .easing(TWEEN.Easing.Cubic.Out)
+                .start();
+
+                tweenCameraUp = new TWEEN.Tween(worldmap.camera.up)
+                .to({ x: 0, y: 1, z: 0 }, Config.viewSwitchDuration)
+                .easing(TWEEN.Easing.Cubic.Out)
+                .start();
+
+            });
+
+            $('#view_switch_spherical').click(function(event) {
+                worldmap.viewMode = '3d';
+
+                worldmap.controls.enabled = false;
+
+                tweenSwitch = new TWEEN.Tween(worldmap.animationProps)
+                .to({interpolatePos: 1.0}, Config.viewSwitchDuration)
+                .onUpdate(function() {
+                    worldmap.geometryNeedsUpdate = true;
+                    worldmap.introRunning = true;
+                })
+                .onComplete(function() {
+                    worldmap.controls = controlsTrackball;
+                    worldmap.controls.enabled = true;
+                    worldmap.introRunning = false;
+                })
+                .easing(TWEEN.Easing.Cubic.Out)
+                .start();
+
+                tweenCameraPosition = new TWEEN.Tween(worldmap.camera.position)
+                .to({ x: 0, y: 0, z: Config.cameraDistance }, Config.viewSwitchDuration)
+                .easing(TWEEN.Easing.Cubic.Out)
+                .start();
+            });
+            };
+        
+
+
+
+    </script>
+</body>
+
+</html>
