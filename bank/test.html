@@ -1,0 +1,141 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Grid</title>
+    <style>
+        body {
+            background: #eeeeee;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+    <script src="https://threejs.org/build/three.js"></script>
+    <script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+    <script src="./js/stats.min.js"></script>
+
+    <script id="vertexShader" type="x-shader/x-vertex">
+        #define M_PI 3.14159265
+        uniform float wrapAmountUniform;
+        varying vec2 vUv;
+        
+        vec3 anglesToSphereCoord(vec2 a, float r)
+        {
+            return vec3(
+                r * sin(a.y) * sin(a.x),
+              r * cos(a.y),
+              r * sin(a.y) * cos(a.x)  
+            );
+        }
+        
+        void main()	{
+            vec2 angles = M_PI * vec2(2. * uv.x, uv.y - 1.);
+          vec3 sphPos = anglesToSphereCoord(angles, 0.6);
+          vec3 wrapPos = mix(position, sphPos, wrapAmountUniform);
+          
+          gl_Position = projectionMatrix * modelViewMatrix * vec4( wrapPos, 1.0 );
+          
+          vUv = uv;
+        }
+        
+        </script>
+        
+        <script id="fragmentShader" type="x-shader/x-fragment">
+        
+         uniform sampler2D baseTexture;
+                    varying vec2 vUv;
+                    
+                    void main() 
+                    {
+                        gl_FragColor = texture2D( baseTexture, vUv );
+                    }  
+        
+        </script>
+
+
+    <style>
+        html,
+        body {
+            height: 100%;
+        }
+    </style>
+
+</head>
+
+<body>
+
+<div id="ThreeJS"></div>
+
+    <script>
+       var container, stats, slider;
+var camera, controls, scene, renderer;
+var wrapAmountUniform = {type: 'f', value: 0};
+
+var clock = new THREE.Clock();
+init();
+animate();
+
+function init() {
+
+  container = document.createElement( 'div' );
+  document.body.appendChild( container );
+  
+  slider = document.getElementById('wrapAmountSlider');
+	
+  camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.1, 10000 );
+  camera.position.z = 1.4;
+
+  scene = new THREE.Scene();
+var ballTexture = new THREE.ImageUtils.loadTexture('./textures/earth.png');
+  var material = new THREE.ShaderMaterial( {
+  	uniforms: {
+    	baseTexture: { type: "t", value: ballTexture },
+    	wrapAmountUniform
+    },
+    vertexShader: document.getElementById( 'vertexShader' ).textContent,
+    fragmentShader: document.getElementById( 'fragmentShader' ).textContent
+  } );
+
+  var planeGeom = new THREE.PlaneBufferGeometry(2, 1, 40, 20);
+  var plane = new THREE.Mesh( planeGeom, material );
+  scene.add( plane );
+
+  renderer = new THREE.WebGLRenderer( { antialias: true } );
+  renderer.setClearColor( 0x000000 );
+  renderer.setPixelRatio( window.devicePixelRatio );
+  renderer.setSize( window.innerWidth, window.innerHeight );
+  
+  container.appendChild( renderer.domElement );
+
+  stats = new Stats();
+  container.appendChild( stats.dom );
+
+  window.addEventListener( 'resize', onWindowResize, false );
+
+}
+// http://webglfundamentals.org/webgl/lessons/webgl-resizing-the-canvas.html
+// <== look there how to resize canvas properly
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+
+  renderer.setSize( window.innerWidth, window.innerHeight );
+}
+
+function updateStuff() {
+var t = clock.getElapsedTime();
+	wrapAmountUniform.value = 0.5 * (1.0 + Math.sin(t));
+}
+
+function animate() {
+  requestAnimationFrame( animate );
+  updateStuff();
+  renderer.render( scene, camera );
+  stats.update();
+}
+
+    </script>
+</body>
+
+</html>

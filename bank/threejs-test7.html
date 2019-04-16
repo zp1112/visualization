@@ -179,17 +179,19 @@
             initStats();
             initOrthCamera();
             scene = new THREE.Scene();      //创建场景  
-            scene.background = new THREE.Color(0x000000);
             scene.translateX(- width / 4);
             scene.translateY(height / 4);
             initLight();
-            renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });     //创建渲染器（并设置抗锯齿属性）
+            renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: false, clearColor: 0x000000 });     //创建渲染器（并设置抗锯齿属性）
             renderer.setSize(width, height);    //设置渲染器的大小
             container.appendChild(renderer.domElement);
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.screenSpacePanning = true;
             window.addEventListener('resize', function () {
                 renderer.setSize(window.innerWidth, window.innerHeight);
+                var aspectRatio = window.innerWidth/window.innerHeight;
+                camera.aspect = aspectRatio;
+                camera.updateProjectionMatrix();
             })
             const vector = camera.getWorldDirection(new THREE.Vector3());
             quadrant = helperMethods.getQuadrant(0, 0, vector.x, vector.z)
@@ -235,8 +237,8 @@
         init();
         function ready(error, data) {
             let temp = {};
-            const [ minLat, maxLat ] = d3.extent(data.map(row => +row.latitude));
-            const [ minLon, maxLon ] = d3.extent(data.map(row => +row.longitude));
+            const [minLat, maxLat] = d3.extent(data.map(row => +row.latitude));
+            const [minLon, maxLon] = d3.extent(data.map(row => +row.longitude));
 
             const { xAxis, yAxis, zAxis } = cubeAxis;
 
@@ -270,7 +272,6 @@
                 }
             })
             Object.values(temp).map(row => res.push(row));
-            console.log(temp)
             maxCount = Math.max(...(Object.values(temp).map(row => row.length)));
             cubeY = 400 / maxCount;
             if (cubeY < density) {
@@ -292,7 +293,7 @@
                 item.month = month;
             }
 
-            cubeGeometry = new THREE.BoxGeometry(cubeX, cubeY, cubeZ);
+            cubeGeometry = new THREE.BoxGeometry(cubeX - 1, cubeY - 1, cubeZ - 1);
             cubesColorScale = d3.scaleLinear().domain([0, maxCount]).range([d3.rgb("#007AFF"), d3.rgb('#ff4300')]);
 
             cubeAxis.scaleY = d3.scaleLinear().domain([0, maxCount]).range([0, cubeAxis.yAxis]);
@@ -331,7 +332,6 @@
             curLayoutMap.cubes = new CubeText(cubeAxis, quadrant);
             curLayoutMap.bars = new BarText(barAxis, quadrant);
             curLayoutMap.spheres = new SphereText(sphereAxis, quadrant);
-
             function setData(d, i) {
                 const { date, longitude, latitude } = data[i];
                 const sphere = new THREE.Object3D()
