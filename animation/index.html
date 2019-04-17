@@ -1,0 +1,176 @@
+<html>
+
+<head>
+    <title>Three js Line</title>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%
+        }
+    </style>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="https://d3js.org/d3-array.v1.min.js"></script>
+    <script src="https://d3js.org/d3-geo.v1.min.js"></script>
+    <script src="https://d3js.org/d3-geo-projection.v2.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/16.3.5/Tween.min.js"></script>
+    <script src="../third/three.min.js"></script>
+    <script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+    <script src="../third/TrackballControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/1.6.20/topojson.min.js"></script>
+    <script src="../third/d3threeD.js"></script>
+    <script src="../third/PinchZoomControls.js"></script>
+    <script src="../third/Projector.js"></script>
+    <script src="../third/jquery-3.1.1.min.js"></script>
+</head>
+
+<body>
+        <div id="view_switch_left">往左</div>
+        <div id="view_switch_right">往右</div>
+    <script>
+        THREE.Vector3.prototype.mix = function(v2, factor) {
+            this.x = this.x + (v2.x - this.x) * factor;
+            this.y = this.y + (v2.y - this.y) * factor;
+            this.z = this.z + (v2.z - this.z) * factor;
+        };
+        var move;
+        var Config = {
+            cameraDistance: 500,
+            cameraDistanceMin: 30,
+            cameraDistanceMax: 10000,
+            cameraDistanceMin2D: 30,
+            globeRotationX: -2.25,
+            globeRotationY: 1.7,
+            globeRadius: 180,
+            introRotateDuration: 4000,
+            introWarpDelay: 2000,
+            introWarpDuration: 2500,
+            viewSwitchDuration: 800,
+            materialCountryBorder: new THREE.LineBasicMaterial( { color: 0xFFFFFF, linewidth: 1.5 } ),
+            mapOffsetX: -540, // -500
+            mapOffsetY: 200, // 160
+            far: 20000,
+            near: 0.1,
+            fov: 60
+        }
+        function Move() {
+            this.introRunning = true;
+            this.geometryNeedsUpdate = false;
+
+            this.animationProps = {
+                interpolatePos: 0.0,
+                lineAnimatePos: 0.0,
+                lineAnimateOffset: 0.0,
+                colorChangeID: 0
+            };
+            this.inited = false;
+        }
+        Move.prototype = {
+            init: function() {
+                const aspect = window.innerWidth / window.innerHeight;
+                this.camera = new THREE.PerspectiveCamera(Config.fov, aspect, Config.near, Config.far);
+                this.camera.position.set(0, 0, Config.cameraDistance);
+                this.camera.lookAt({ x: 0, y: 0, z: 0 });//让相机指向场景中心
+
+                this.renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: false });     //创建渲染器（并设置抗锯齿属性）
+                this.renderer.setSize(window.innerWidth, window.innerHeight);    //设置渲染器的大小
+                document.body.appendChild(this.renderer.domElement);
+                this.scene = new THREE.Scene();
+                this.scene.add( new THREE.AmbientLight( 0xffffff ) );
+                pointLight = new THREE.PointLight(0x000000);
+                pointLight.position.x = 0.0;
+                pointLight.position.y = 500.0;
+                pointLight.position.z = 1000.0;
+                pointLight.intensity = 1.0;
+                this.scene.add(pointLight);
+                this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.screenSpacePanning = true;
+                this.inited = true;
+                this.completeInit();
+            },
+            animate: function() {
+                if(this.geometryNeedsUpdate) {
+                    updateCubeGeometry(this);
+                }
+            },
+
+            completeInit: function () {
+                createCubeGeometry(this);
+                render();
+            }
+        }
+        move = new Move();
+        move.init();
+        function render() {
+            requestAnimationFrame(render);
+            if (move.inited) {
+                move.geometryNeedsUpdate = false;
+            }
+            move.controls.update();
+            TWEEN.update();
+            if (move.inited) {
+                move.animate();
+            }
+            move.renderer.render(move.scene, move.camera);
+        }
+        
+        function createCubeGeometry(move) {
+            move.mesh = new THREE.Mesh(new THREE.BoxGeometry(50, 50, 50), new THREE.MeshLambertMaterial({
+                color: '#57f972',
+                transparent: true
+            }))
+            move.mesh.position.x = -400;
+            move.meshLeft = move.mesh.clone();
+            move.meshRight = new THREE.Mesh(new THREE.BoxGeometry(50, 50, 50), new THREE.MeshLambertMaterial({
+                color: '#57f972',
+                transparent: true
+            }))
+            move.meshRight.position.x = 400;
+            move.scene.add(move.mesh);
+        }
+        function updateCubeGeometry(move) {
+            move.mesh.position.copy(move.meshLeft.position);
+            move.mesh.position.mix(move.meshRight.position, move.animationProps.interpolatePos);
+        }
+        initViewSwitch(move);
+        function initViewSwitch(move) {
+            $('#view_switch_left').click(function(event) {
+                tweenSwitch = new TWEEN.Tween(move.animationProps)
+                    .to({interpolatePos: 0.0}, Config.viewSwitchDuration)
+                    .onUpdate(function() {
+                        move.geometryNeedsUpdate = true;
+                        move.introRunning = true;
+                    })
+                    .onComplete(function() {
+                        move.introRunning = false;
+                    })
+                    .easing(TWEEN.Easing.Cubic.Out)
+                    .start();
+
+                });
+
+            $('#view_switch_right').click(function(event) {
+                tweenSwitch = new TWEEN.Tween(move.animationProps)
+                    .to({interpolatePos: 1.0}, Config.viewSwitchDuration)
+                    .onUpdate(function() {
+                        move.geometryNeedsUpdate = true;
+                        move.introRunning = true;
+                    })
+                    .onComplete(function() {
+                        move.introRunning = false;
+                    })
+                    .easing(TWEEN.Easing.Cubic.Out)
+                    .start();
+                });
+            };
+        
+
+
+
+    </script>
+</body>
+
+</html>
