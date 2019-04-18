@@ -197,7 +197,7 @@
                 this.animationProps.interpolatePos = 1.0;
                 const that = this;
                 createCountriesGeometry(this);
-                updateCountriesGeometry(this, true);
+                updateCountriesGeometry(this);
                 createCountriesBufferGeometry(this);
                 updateCountriesBufferGeometry(this);
                 window.setTimeout(function() {
@@ -370,7 +370,7 @@
             worldmap.countriesObject3D.scale.set(scaleStart, scaleStart, scaleStart);
             worldmap.countriesObject3D.rotation._y = -Math.PI * 6; // 不知道为什么要使用_y
         }
-        function updateCountriesGeometry(worldmap, computeFaceNormals = false) {
+        function updateCountriesGeometry(worldmap) {
             var i;
             var k;
             for(i = 0; i < worldmap.countries.length; i++) {
@@ -379,7 +379,6 @@
                     worldmap.countries[i].geometry.vertices[k].mix(worldmap.countries[i].geometry3D.vertices[k], worldmap.animationProps.interpolatePos);
                 }
                 worldmap.countries[i].geometry.computeBoundingSphere(); // required for picking to work after updating vertices
-                if(computeFaceNormals) worldmap.countries[i].geometry.computeFaceNormals(); // required for shading to look correct
             }
         }
         function createCountriesBufferGeometry(worldmap) {
