@@ -269,14 +269,12 @@
                 this.completeInit();
             },
             initThree: function() {
-                const aspect = this.width / this.height;
-                this.camera = new THREE.PerspectiveCamera(Config.fov, aspect, Config.near, Config.far);
-                this.camera.position.set(800, 1500, 1500);
-                this.camera.lookAt({ x: 0, y: 0, z: 0 });//让相机指向场景中心
-
                 this.renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: false });     //创建渲染器（并设置抗锯齿属性）
                 this.renderer.setSize(this.width, this.height);    //设置渲染器的大小
                 document.body.appendChild(this.renderer.domElement);
+
+                this.initCamera();
+                this.initControls();
 
                 this.scene = new THREE.Scene();
                 this.scene.translateX(-this.width / 4);
@@ -288,8 +286,6 @@
                 pointLight.position.z = 1000.0;
                 pointLight.intensity = 1.0;
                 this.scene.add(pointLight);
-                this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
-                this.controls.screenSpacePanning = true;
                 const that = this;
                 
                 window.addEventListener('resize', function () {
@@ -298,6 +294,16 @@
                     that.camera.aspect = aspectRatio;
                     that.camera.updateProjectionMatrix();
                 })
+            },
+            initControls: function() {
+                this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.screenSpacePanning = true;
+            },
+            initCamera: function() {
+                const aspect = this.width / this.height;
+                this.camera = new THREE.PerspectiveCamera(Config.fov, aspect, Config.near, Config.far);
+                this.camera.position.set(800, 1500, 1500);
+                this.camera.lookAt({ x: 0, y: 0, z: 0 });//让相机指向场景中心
             },
             animate: function() {
                 const vector = this.camera.getWorldDirection(new THREE.Vector3());
@@ -479,6 +485,8 @@
                         Object.values(bankChart.curLayoutMap).forEach(row => bankChart.scene.remove(row.group));
                         bankChart.curLayout = target.id;
                         bankChart.animationProps.interpolatePos = 0;
+                        bankChart.initCamera();
+                        bankChart.initControls();
                         tweenSwitch = new TWEEN.Tween(bankChart.animationProps)
                             .to({interpolatePos: 1}, Config.viewSwitchDuration)
                             .onUpdate(function() {
