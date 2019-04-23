@@ -1,0 +1,132 @@
+<html>
+
+<head>
+    <title>Three js Line</title>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%
+        }
+    </style>
+
+<script src="https://threejsfundamentals.org/threejs/resources/threejs/r103/three.js"></script>
+<script src="https://threejsfundamentals.org/threejs/resources/threejs/r103/js/utils/BufferGeometryUtils.js"></script>
+<script src="https://threejsfundamentals.org/threejs/resources/threejs/r103/js/controls/OrbitControls.js"></script>
+</head>
+
+<body>
+  <canvas id="c"></canvas>
+
+    <script>
+      // Three.js - Lots of Objects - Merged
+// from https://threejsfundamentals.org/threejs/threejs-lots-of-objects-merged.html
+
+  'use strict';
+
+/* global THREE */
+
+function main() {
+  const canvas = document.querySelector('#c');
+  const renderer = new THREE.WebGLRenderer({canvas: canvas});
+
+  const fov = 60;
+  const aspect = 2;  // the canvas default
+  const near = 0.1;
+  const far = 10;
+  const camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
+  camera.position.z = 2.5;
+
+  const controls = new THREE.OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.rotateSpeed = 0.1;
+  controls.enablePan = false;
+  controls.minDistance = 1.2;
+  controls.maxDistance = 4;
+  controls.update();
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color('black');
+
+  function addBoxes() {
+    const lonHelper = new THREE.Object3D();
+    scene.add(lonHelper);
+    // We rotate the latHelper on its X axis to the latitude
+    const latHelper = new THREE.Object3D();
+    lonHelper.add(latHelper);
+    // The position helper moves the object to the edge of the sphere
+    const positionHelper = new THREE.Object3D();
+    positionHelper.position.z = 0;
+    latHelper.add(positionHelper);
+    // Used to move the center of the cube so it scales from the position Z axis
+    const originHelper = new THREE.Object3D();
+    originHelper.position.z = 0.5;
+    positionHelper.add(originHelper);
+
+    const boxWidth = 1;
+    const boxHeight = 1;
+    const boxDepth = 1;
+    const geometry = new THREE.BoxBufferGeometry(boxWidth, boxHeight, boxDepth);
+
+    lonHelper.rotation.y = Math.PI / 2;
+
+    positionHelper.scale.set(1, 1, THREE.Math.lerp(0.01, 1, 1));
+    originHelper.updateWorldMatrix(true, false);
+    geometry.applyMatrix(originHelper.matrixWorld);
+
+    const material = new THREE.MeshBasicMaterial({color:'red'});
+    const mesh = new THREE.Mesh(geometry, material);
+    scene.add(mesh);
+  }
+
+    addBoxes();
+
+  function resizeRendererToDisplaySize(renderer) {
+    const canvas = renderer.domElement;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    const needResize = canvas.width !== width || canvas.height !== height;
+    if (needResize) {
+      renderer.setSize(width, height, false);
+    }
+    return needResize;
+  }
+
+  let renderRequested = false;
+
+  render();
+  function render() {
+    renderRequested = undefined;
+
+    if (resizeRendererToDisplaySize(renderer)) {
+      const canvas = renderer.domElement;
+      camera.aspect = canvas.clientWidth / canvas.clientHeight;
+      camera.updateProjectionMatrix();
+    }
+
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  render();
+
+  function requestRenderIfNotRequested() {
+    if (!renderRequested) {
+      renderRequested = true;
+      requestAnimationFrame(render);
+    }
+  }
+
+  controls.addEventListener('change', requestRenderIfNotRequested);
+  window.addEventListener('resize', requestRenderIfNotRequested);
+}
+
+main();
+
+    </script>
+</body>
+
+</html>

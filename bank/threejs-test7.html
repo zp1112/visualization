@@ -15,8 +15,10 @@
     <script src="https://d3js.org/d3.v4.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/16.3.5/Tween.min.js"></script>
     <script src="../third/three.min.js"></script>
+    <script src="../third/THREE.MeshLine.js"></script>
     <script src="../third/stats.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
+    <script src="https://threejsfundamentals.org/threejs/resources/threejs/r103/js/utils/BufferGeometryUtils.js"></script>
     <script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
     <script src="../third/jquery-3.1.1.min.js"></script>
     <script src="//d3js.org/queue.v1.min.js"></script>
@@ -246,10 +248,8 @@
                 this.barAxis.scaleZ = i => '';
                 this.barAxis.scaleX = i => i + 1;
 
-                // this.curLayoutMap.planes = new PlaneText(this.planeAxis, this.quadrant);
-                // this.curLayoutMap.cubes = new CubeText(this.cubeAxis, this.quadrant);
-                // this.curLayoutMap.bars = new BarText(this.barAxis, this.quadrant);
-                // this.curLayoutMap.spheres = new SphereText(this.sphereAxis, this.quadrant);
+                const vector = this.camera.getWorldDirection(new THREE.Vector3());
+                this.quadrant = helperMethods.getQuadrant(0, 0, vector.x, vector.z);
 
                 this.curLayoutMap.planes = new DrawAxis(this.planeAxis, this.quadrant, {
                     textz: 'latitude', texty: '', textx: 'longitude'

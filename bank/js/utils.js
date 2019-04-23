@@ -97,6 +97,15 @@
             geometry1.vertices.push(new THREE.Vector3(0, 0, 0));  //添加顶点  
             geometry1.vertices.push(vector2);
             return [geometry, geometry1];
+        },
+        createMeshLineGeometry: function (vector, colors) {
+            const geometry = new THREE.Geometry()
+            geometry.colors = colors;
+            geometry.vertices.push(new THREE.Vector3(0, 0, 0));  //添加顶点  
+            geometry.vertices.push(vector);  //添加顶点  
+            var line = new MeshLine();
+            line.setGeometry(geometry);
+            return line;
         }
     }
 })()
