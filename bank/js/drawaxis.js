@@ -239,7 +239,7 @@ function drawGrid(options) {
 		opacity: 1,
 		resolution: resolution,
 		sizeAttenuation: !false,
-		lineWidth: 4,
+		lineWidth: 8,
 		near: bankChart.camera.near,
 		far: bankChart.camera.far
     });
@@ -313,14 +313,14 @@ function drawGrid(options) {
     const meshline7 = helperMethods.createMeshLineGeometry(new THREE.Vector3(xAxis, 0, 0), [color1, color2]);
     // 后边面
     for (let i = 0; i <= yAxisn; i++) {
-        const line = new THREE.Line(meshline7.geometry.clone(), material);
+        const line = new THREE.Mesh(meshline7.geometry.clone(), material);
         line.position.y = i * ygrid;
         line.visiblefunc = visiblefunc14;
         group.add(line);
     }
     for (let i = 0; i <= xAxisn; i++) {
         const meshline8 = helperMethods.createMeshLineGeometry(new THREE.Vector3(yAxis, 0, 0), [new THREE.Color(colorScale(i)), new THREE.Color(colorScale(i))]);
-        const line1 = new THREE.Line(meshline8.geometry.clone(), material);
+        const line1 = new THREE.Mesh(meshline8.geometry.clone(), material);
         line1.position.x = i * xgrid;
         line1.rotation.z = Math.PI / 2;
         line1.visiblefunc = visiblefunc14
@@ -329,7 +329,7 @@ function drawGrid(options) {
     // 前边面
     const meshline9 = helperMethods.createMeshLineGeometry(new THREE.Vector3(xAxis, 0, 0), [color1, color2]);
     for (let i = 0; i <= yAxisn; i++) {
-        const line = new THREE.Line(meshline9.geometry.clone(), material);
+        const line = new THREE.Mesh(meshline9.geometry.clone(), material);
         line.position.y = i * ygrid;
         line.position.z = zAxis;
         line.visiblefunc = visiblefunc23
@@ -337,7 +337,7 @@ function drawGrid(options) {
     }
     for (let i = 0; i <= xAxisn; i++) {
         const meshline10 = helperMethods.createMeshLineGeometry(new THREE.Vector3(yAxis, 0, 0), [new THREE.Color(colorScale(i)), new THREE.Color(colorScale(i))]);
-        const line1 = new THREE.Line(meshline10.geometry.clone(), material);
+        const line1 = new THREE.Mesh(meshline10.geometry.clone(), material);
         line1.position.x = i * xgrid;
         line1.position.z = zAxis;
         line1.visiblefunc = visiblefunc23
