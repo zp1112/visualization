@@ -29,11 +29,10 @@ function drawRect(gridGroup, xAxis, zAxis) {
     material.map.needsUpdate = true;
 }
 function drawGrid(options) {
-    const { zAxis, yAxis, xAxis, xgrid, ygrid, zgrid, group, scaleY, scaleZ, scaleX, texty, textz, textx, xAxisCenter } = options;
+    const { zAxis, yAxis, xAxis, xgrid, ygrid, zgrid, group, scaleY, scaleZ, scaleX, texty, textz, textx, xAxisCenter, textxFormat } = options;
     const zAxisn = ~~(zAxis / zgrid);
     const xAxisn = ~~(xAxis / xgrid);
     const yAxisn = ~~(yAxis / ygrid);
-    // const material = new THREE.LineBasicMaterial({ color: 0xc3c4cc });
 
     var visiblefunc12 = helperMethods.visiblefunc(1, 2);
     var visiblefunc34 = helperMethods.visiblefunc(3, 4);
@@ -172,7 +171,11 @@ function drawGrid(options) {
     var rotationfunc1 = helperMethods.rotationfunc('z', 1, -Math.PI / 2, Math.PI / 2);
     var rotationfunc2 = helperMethods.rotationfunc('z', 2, -Math.PI / 2, Math.PI / 2);
     for (let i = 0; i <= (xAxisCenter ? xAxisn - 1 : xAxisn); i++) {
-        var spritey = helperMethods.makeTextSprite(scaleX(i));
+        if (textxFormat) {
+            var spritey = helperMethods.makeTextSprite(textxFormat[0] + i);
+        } else {
+            var spritey = helperMethods.makeTextSprite(scaleX(i));
+        }
         var bbox = new THREE.Box3().setFromObject(spritey);
         const textWidth = bbox.max.x - bbox.min.x;
         if (textWidth > maxTextWidth) maxTextWidth = textWidth;
@@ -239,7 +242,7 @@ function drawGrid(options) {
 		opacity: 1,
 		resolution: resolution,
 		sizeAttenuation: !false,
-		lineWidth: 8,
+		lineWidth: 4,
 		near: bankChart.camera.near,
 		far: bankChart.camera.far
     });
