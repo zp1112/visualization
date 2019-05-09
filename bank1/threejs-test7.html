@@ -164,6 +164,7 @@
             this.curLayoutMap = {};
 
             this.data = [];
+            this.playSortedData = {};
         }
         BankChart.prototype = {
             init: function() {
@@ -180,7 +181,7 @@
 
                 this.scaleLinearLat = d3.scaleLinear().domain([maxLat, minLat]).range([0, zAxis]);
                 this.scaleLinearLon = d3.scaleLinear().domain([minLon, maxLon]).range([0, xAxis]);
-                this.scaleTime = d3.scaleTime().range([0, 600]).domain((d3.extent(data, function (d) { return new Date(d.date); })))
+                this.scaleTime = d3.scaleTime().range([0, yAxis]).domain((d3.extent(data, function (d) { return new Date(d.date); })))
 
                 const density = 10;
                 this.cubeX = density;
@@ -208,7 +209,7 @@
                     }
                         row.j = temp[fixed];
                 })
-                this.maxCount = Math.max(...(data.map(row => row.j)));
+                this.maxCount = Math.max(...(Object.values(temp)));
                 this.cubeY = 400 / this.maxCount;
                 if (this.cubeY < density) {
                     this.cubeX = this.cubeZ = this.cubeY;
@@ -310,9 +311,7 @@
                 this.scene.translateY(this.height / 4);
                 this.scene.add( new THREE.AmbientLight( 0xffffff ) );
                 pointLight = new THREE.PointLight(0x000000);
-                pointLight.position.x = 0.0;
-                pointLight.position.y = 500.0;
-                pointLight.position.z = 1000.0;
+                pointLight.position.set(0, 500, 1000);
                 pointLight.intensity = 1.0;
                 this.scene.add(pointLight);
                 const that = this;
@@ -403,7 +402,6 @@
                 d.randoms = random
             },
             setSortedData: function() {
-                this.playSortedData = {};
                 this.playSortedData.latitude = sortedByLatitude(this.cubes);
                 this.playSortedData.longitude = sortedByLongitude(this.cubes);
                 this.playSortedData.time = sortedByTime(this.cubes);
@@ -441,7 +439,7 @@
             bankChart[axis].xgrid = bankChart[axis].perCount * cubeX + bankChart[axis].bandWidth;
             bankChart[axis].zgrid = bankChart.cubeZ;
             bankChart[axis].zAxis = bankChart.cubeZ;
-            console.log(111, bankChart[axis].xgrid, bankChart[axis].xAxis, bankChart[axis].bandWidth)
+            // console.log(111, bankChart[axis].xgrid, bankChart[axis].xAxis, bankChart[axis].bandWidth)
             bankChart[axis].scaleY = i => i * bankChart[axis].perCount * bankChart[axis].perCount;
             bankChart[axis].scaleZ = i => '';
             bankChart[axis].scaleX = i => i + 1;
@@ -516,7 +514,6 @@
                 })
                 bankChart.data = data;
         
-                    // mousemove事件
                 const tooltipPosition = {};
                 let intersects = [];
                 let INTERSECTED;
@@ -581,22 +578,19 @@
                     color: '#57f972',
                     transparent: true
                 });
-                cube1 = new THREE.Mesh(bankChart.cubeGeometry, material);
-                cube1.customType = 'cube';
-                cube1.customName = item.date;
-                cube1.customLat = item.latitude;
-                cube1.customLon = item.longitude;
+                const cube = new THREE.Mesh(bankChart.cubeGeometry, material);
+                cube.customType = 'cube';
+                cube.customName = item.date;
+                cube.customLat = item.latitude;
+                cube.customLon = item.longitude;
                 item.centerPos.y = item.j * bankChart.cubeY + bankChart.cubeY / 2;
 
-                var helper = new THREE.BoxHelper(cube1);
+                var helper = new THREE.BoxHelper(cube);
                 helper.material.color.set(0x0be064);
 
                 const cubeGroup = new THREE.Object3D();
-                cubeGroup.add(cube1, helper);
+                cubeGroup.add(cube, helper);
 
-                cubeGroup.j = item.j;
-                cubeGroup.month = item.month;
-                cubeGroup.index = item.index;
                 bankChart.cubes.push(cubeGroup);
                 bankChart.scene.add(cubeGroup);
                 bankChart.preLayout = 'randoms';
@@ -623,8 +617,6 @@
                         Object.values(bankChart.curLayoutMap).forEach(row => bankChart.scene.remove(row.group));
                         bankChart.curLayout = target.id;
                         bankChart.animationProps.interpolatePos = 0;
-                        // bankChart.camera.position.set(bankChart.camera.position.x, bankChart.camera.position.y, 1500);
-                        // bankChart.camera.lookAt({ x: 0, y: 0, z: 0 });//让相机指向场景中心
                         // bankChart.initCamera();
                         // bankChart.initControls();
                         tweenSwitch = new TWEEN.Tween(bankChart.animationProps)
@@ -651,7 +643,6 @@
                 timers.forEach(row => clearTimeout(row));
                 timers = [];
                 if(target.nodeName.toLocaleLowerCase() == 'li'){
-                    bankChart.animationProps.interpolatePos = 0;
                     // bankChart.initCamera();
                     // bankChart.initControls();
                     bankChart.cubes.forEach(row => row.visible = false);
