@@ -1,0 +1,670 @@
+<html>
+
+<head>
+  <title>Three js Line</title>
+  <style>
+    body {
+      margin: 0;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%
+    }
+  </style>
+  <script src="https://d3js.org/d3.v4.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/16.3.5/Tween.min.js"></script>
+  <script src="../third/three.min.js"></script>
+  <script src="../third/THREE.MeshLine.js"></script>
+  <script src="../third/stats.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
+  <script src="https://threejsfundamentals.org/threejs/resources/threejs/r103/js/utils/BufferGeometryUtils.js"></script>
+  <script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+  <script src="../third/jquery-3.1.1.min.js"></script>
+  <script src="//d3js.org/queue.v1.min.js"></script>
+  <script src="../bank/js/utils.js"></script>
+  <script src="../bank/js/drawaxis.js"></script>
+  <style>
+    html,
+    body {
+      height: 100%;
+    }
+
+    #tooltip {
+      position: absolute;
+      background: #fff;
+      padding: 10px;
+      border-radius: 10px;
+      display: none;
+    }
+
+    .buttons {
+      position: absolute;
+      color: #000;
+    }
+
+    li {
+      background: #fff;
+      margin: 10px;
+      padding: 10px;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="tooltip"></div>
+  <div class="buttons">
+    <ul id="buttons">
+      <li id="cubes">cubes</li>
+      <li id="spheres">spheres</li>
+      <li id="bars">bars</li>
+      <li id="hours">hours</li>
+      <li id="years">years</li>
+      <li id="planes">planes</li>
+    </ul>
+    <ul id="plays">
+      <li id="latitude">latitude</li>
+      <li id="longitude">longitude</li>
+      <li id="time">time</li>
+      <li id="state">state</li>
+    </ul>
+  </div>
+  <script>
+    THREE.Vector3.prototype.mix = function (v2, factor) {
+      this.x = this.x + (v2.x - this.x) * factor;
+      this.y = this.y + (v2.y - this.y) * factor;
+      this.z = this.z + (v2.z - this.z) * factor;
+    };
+    const texture = new THREE.TextureLoader().load('../bank/china.jpg');
+    var bankChart;
+    var Config = {
+      cameraDistance: 500,
+      cameraDistanceMin: 30,
+      cameraDistanceMax: 10000,
+      cameraDistanceMin2D: 30,
+      viewSwitchDuration: 1000,
+      materialCountryBorder: new THREE.LineBasicMaterial({ color: 0xFFFFFF, linewidth: 1.5 }),
+      far: 10000,
+      near: 1,
+      fov: 45
+    }
+    function BankChart() {
+      this.isRunning = true;
+      this.countriesObject3D = null;
+      this.geometryNeedsUpdate = false;
+
+      this.animationProps = {
+        interpolatePos: 0.0,
+        lineAnimatePos: 0.0,
+        lineAnimateOffset: 0.0,
+        colorChangeID: 0
+      };
+      this.inited = false;
+
+      this.container = document.body;
+      this.width = window.innerWidth;
+      this.height = window.innerHeight;
+
+      this.raycaster = new THREE.Raycaster();
+      this.mouse = new THREE.Vector2();
+
+      this.cubes = [];
+      this.curLayout = '';
+      this.preLayout = '';
+
+      this.sphereGridGroup = new THREE.Group();
+      this.barGridGroup = new THREE.Group();
+      this.hourGridGroup = new THREE.Group();
+      this.cubeGridGroup = new THREE.Group();
+      this.yearGridGroup = new THREE.Group();
+      this.planeGridGroup = new THREE.Group();
+
+      this.cubeAxis = {
+        xAxis: 1000,
+        yAxis: 400,
+        zAxis: 600,
+        xgrid: 100,
+        ygrid: 100,
+        zgrid: 120,
+        group: this.cubeGridGroup
+      }
+      this.sphereAxis = {
+        xAxis: 1000,
+        yAxis: 600,
+        zAxis: 600,
+        xgrid: 100,
+        ygrid: 100,
+        zgrid: 150,
+        group: this.sphereGridGroup
+      }
+      this.barAxis = {
+        bandWidth: 6,
+        xAxis: 1000,
+        group: this.barGridGroup
+      }
+      this.hourAxis = {
+        bandWidth: 3,
+        xAxis: 1000,
+        group: this.hourGridGroup
+      }
+      this.yearAxis = {
+        bandWidth: 3,
+        xAxis: 1000,
+        group: this.yearGridGroup
+      }
+      this.planeAxis = {
+        xAxis: 1000,
+        zAxis: 600,
+        yAxis: 0,
+        ygrid: 0,
+        xgrid: 100,
+        zgrid: 100,
+        group: this.planeGridGroup
+      }
+
+      this.curLayoutMap = {};
+
+      this.data = [];
+      this.playSortedData = {};
+    }
+    BankChart.prototype = {
+      init: function () {
+        this.initThree();
+        this.initData();
+      },
+      initData: function () {
+        const { data } = this;
+        let temp = {};
+        const [minLat, maxLat] = d3.extent(data.map(row => +row.latitude));
+        const [minLon, maxLon] = d3.extent(data.map(row => +row.longitude));
+
+        const { xAxis, yAxis, zAxis } = this.cubeAxis;
+
+        this.scaleLinearLat = d3.scaleLinear().domain([maxLat, minLat]).range([0, zAxis]);
+        this.scaleLinearLon = d3.scaleLinear().domain([minLon, maxLon]).range([0, xAxis]);
+        this.scaleTime = d3.scaleTime().range([0, this.sphereAxis.yAxis]).domain((d3.extent(data, function (d) { return new Date(d.date); })))
+        const density = 10;
+        this.cubeX = density;
+        this.cubeZ = density;
+        for (const item of data) {
+          const posX = parseInt(this.scaleLinearLon(item.longitude) / density);
+          const posZ = parseInt(this.scaleLinearLat(item.latitude) / density);
+          let x = (posX - 1) * density + density * 3 / 2;
+          let z = (posZ - 1) * density + density * 3 / 2;
+          if (x > xAxis - density / 2) {
+            x = x - density;
+          }
+          if (z > zAxis - density / 2) {
+            z = z - density;
+          }
+          const centerPos = { x, z };
+          item.centerPos = centerPos;
+        }
+        data.sort((a, b) => {
+          return a.type > b.type ? 1 : -1;
+        })
+        data.forEach(row => {
+          const fixed = JSON.stringify(row.centerPos);
+          if (temp[fixed]) {
+            temp[fixed] += 1;
+          } else {
+            temp[fixed] = 1;
+          }
+          row.j = temp[fixed];
+        })
+        this.maxCount = Math.max(...(Object.values(temp)));
+        this.cubeY = 400 / this.maxCount;
+        if (this.cubeY < density) {
+          this.cubeX = this.cubeZ = this.cubeY;
+        }
+
+        if (this.cubeY > this.cubeX) {
+          this.cubeY = this.cubeX
+        }
+        for (const item of data) {
+          const month = new Date(item.date).getMonth();
+          const monthArr = data.filter(row => row.month === month);
+          if (!monthArr.length) {
+            item.index = 0;
+          } else {
+            const curIndex = Math.max(...(monthArr.map(row => row.index)));
+            item.index = curIndex + 1;
+          }
+          item.month = month;
+
+          const hour = new Date(item.date).getHours();
+          const hourArr = data.filter(row => row.hour === hour);
+          if (!hourArr.length) {
+            item.hourIndex = 0;
+          } else {
+            const curIndex = Math.max(...(hourArr.map(row => row.hourIndex)));
+            item.hourIndex = curIndex + 1;
+          }
+          item.hour = hour;
+
+          const year = new Date(item.date).getFullYear();
+          const yearArr = data.filter(row => row.year === year);
+          if (!yearArr.length) {
+            item.yearIndex = 0;
+          } else {
+            const curIndex = Math.max(...(yearArr.map(row => row.yearIndex)));
+            item.yearIndex = curIndex + 1;
+          }
+          item.year = year;
+        }
+
+        this.cubeGeometry = new THREE.BoxGeometry(this.cubeX - 1, this.cubeY - 1, this.cubeZ - 1);
+        this.cubesColorScale = d3.scaleLinear().domain([0, this.maxCount]).range([d3.rgb("#007AFF"), d3.rgb('#ff4300')]);
+
+        this.cubeAxis.scaleY = d3.scaleLinear().domain([0, this.maxCount]).range([0, this.cubeAxis.yAxis]);
+        this.cubeAxis.scaleZ = i => this.scaleLinearLat.invert(i * this.cubeAxis.zgrid).toFixed(2);
+        this.cubeAxis.scaleX = i => this.scaleLinearLon.invert(i * this.cubeAxis.xgrid).toFixed(2);
+
+        this.sphereAxis.scaleY = i => moment(this.scaleTime.invert(i * this.sphereAxis.ygrid)).format('YYYY-MM-DD hh:mm:ss');
+        this.sphereAxis.scaleZ = i => this.scaleLinearLat.invert(i * this.sphereAxis.zgrid).toFixed(2);
+        this.sphereAxis.scaleX = i => this.scaleLinearLon.invert(i * this.sphereAxis.xgrid).toFixed(2);
+
+        this.planeAxis.scaleY = i => '';
+        this.planeAxis.scaleZ = i => this.scaleLinearLat.invert(i * this.planeAxis.zgrid).toFixed(2);
+        this.planeAxis.scaleX = i => this.scaleLinearLon.invert(i * this.planeAxis.xgrid).toFixed(2);
+
+        setBarAxis(this, 'barAxis', 12, 'index');
+        setBarAxis(this, 'hourAxis', 24, 'hourIndex');
+        const [minYear, maxYear] = d3.extent(data.map(row => new Date(row.date).getFullYear()));
+        this.minYear = minYear;
+        this.maxYear = maxYear;
+        setBarAxis(this, 'yearAxis', maxYear - minYear + 1, 'yearIndex');
+
+        const vector = this.camera.getWorldDirection(new THREE.Vector3());
+        this.quadrant = helperMethods.getQuadrant(0, 0, vector.x, vector.z);
+
+        this.curLayoutMap.planes = new DrawAxis(this.planeAxis, this.quadrant, {
+          textz: 'latitude', texty: '', textx: 'longitude'
+        });
+        this.curLayoutMap.cubes = new DrawAxis(this.cubeAxis, this.quadrant, {
+          textz: 'latitude', texty: 'Count', textx: 'longitude'
+        });
+        this.curLayoutMap.bars = new DrawAxis(this.barAxis, this.quadrant, {
+          textz: 'xx', texty: 'Count', textx: 'Month', xAxisCenter: true
+        }, false);
+        this.curLayoutMap.spheres = new DrawAxis(this.sphereAxis, this.quadrant, {
+          textz: 'latitude', texty: 'Time', textx: 'longitude'
+        });
+        this.curLayoutMap.hours = new DrawAxis(this.hourAxis, this.quadrant, {
+          textz: 'xx', texty: 'Count', textx: 'Hour', xAxisCenter: true
+        }, false);
+        this.curLayoutMap.years = new DrawAxis(this.yearAxis, this.quadrant, {
+          textz: 'xx', texty: 'Count', textx: 'Year', xAxisCenter: true, textxFormat: [minYear, maxYear]
+        }, false);
+
+        this.inited = true;
+
+        this.completeInit();
+      },
+      initThree: function () {
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: false });     //创建渲染器（并设置抗锯齿属性）
+        this.renderer.setSize(this.width, this.height);    //设置渲染器的大小
+        document.body.appendChild(this.renderer.domElement);
+
+        this.initCamera();
+        this.initControls();
+
+        this.scene = new THREE.Scene();
+        this.scene.translateX(-this.width / 4);
+        this.scene.translateY(this.height / 4);
+        this.scene.add(new THREE.AmbientLight(0xffffff));
+        pointLight = new THREE.PointLight(0x000000);
+        pointLight.position.set(0, 500, 1000);
+        pointLight.intensity = 1.0;
+        this.scene.add(pointLight);
+        const that = this;
+
+        window.addEventListener('resize', function () {
+          that.renderer.setSize(window.innerWidth, window.innerHeight);
+          var aspectRatio = window.innerWidth / window.innerHeight;
+          that.camera.aspect = aspectRatio;
+          that.camera.updateProjectionMatrix();
+        })
+      },
+      initControls: function () {
+        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.screenSpacePanning = true;
+      },
+      initCamera: function () {
+        const aspect = this.width / this.height;
+        this.camera = new THREE.PerspectiveCamera(Config.fov, aspect, Config.near, Config.far);
+        this.camera.position.set(800, 1500, 1500);
+        this.camera.lookAt({ x: 0, y: 0, z: 0 });//让相机指向场景中心
+      },
+      animate: function () {
+        const vector = this.camera.getWorldDirection(new THREE.Vector3());
+        const curquadrant = helperMethods.getQuadrant(0, 0, vector.x, vector.z);
+        if (curquadrant !== this.quadrant) {
+          this.quadrant = curquadrant;
+          Object.values(this.curLayoutMap).forEach(row => row.updateText(this.quadrant));
+        }
+        if (this.geometryNeedsUpdate) {
+          updateCubeGeometry(this);
+        }
+      },
+      setData: function (d, i) {
+        d.userData = this.data[i];
+        const { date, longitude, latitude } = this.data[i];
+        const { cubeX, cubeY, cubeZ, cubes } = this;
+        const sphere = { position: {} };
+        sphere.position.x = this.scaleLinearLon(longitude)
+        sphere.position.y = this.scaleTime(new Date(date)) + cubeY
+        sphere.position.z = this.scaleLinearLat(latitude)
+        d.spheres = sphere
+
+        const bar = { position: {} }
+        const { perCount, bandWidth } = this.barAxis;
+        bar.position.x = this.data[i].index % perCount * cubeX + cubeX / 2 + this.data[i].month * (cubeX * perCount + bandWidth) + bandWidth / 2
+        bar.position.y = ~~(this.data[i].index / perCount) * cubeY + cubeY / 2
+        bar.position.z = cubeZ / 2
+
+        d.bars = bar
+
+        const hour = { position: {} }
+        const hourCubeX = cubeX / 2;
+        hour.position.x = this.data[i].hourIndex % this.hourAxis.perCount * hourCubeX + hourCubeX / 2 + this.data[i].hour * (hourCubeX * this.hourAxis.perCount + this.hourAxis.bandWidth) + bandWidth / 2
+        hour.position.y = ~~(this.data[i].hourIndex / this.hourAxis.perCount) * cubeY + cubeY / 2
+        hour.position.z = cubeZ / 2
+
+        d.hours = hour
+        d.hours.cubeXScale = 0.5;
+
+        const year = { position: {} }
+        year.cubeXScale = 12 / (this.maxYear - this.minYear + 1);
+        const yearCubeX = cubeX * year.cubeXScale;
+        year.position.x = this.data[i].yearIndex % this.yearAxis.perCount * yearCubeX + yearCubeX / 2 + (this.data[i].year - this.minYear) * (yearCubeX * this.yearAxis.perCount + this.yearAxis.bandWidth) + bandWidth / 2
+        year.position.y = ~~(this.data[i].yearIndex / this.yearAxis.perCount) * cubeY + cubeY / 2
+        year.position.z = cubeZ / 2
+
+        d.years = year
+
+        const cube = { position: {} }
+        cube.position.x = this.data[i].centerPos.x
+        cube.position.y = this.data[i].j * cubeY + cubeY / 2
+        cube.position.z = this.data[i].centerPos.z
+
+        d.cubes = cube
+
+        const plane = { position: {} }
+        plane.position.x = this.data[i].centerPos.x
+        plane.position.y = cubeY / 2
+        plane.position.z = this.data[i].centerPos.z
+
+        d.planes = plane
+
+        const random = { position: {} }
+        random.position.z = Math.random() * this.cubeAxis.zAxis / 2 + this.cubeAxis.zAxis / 2;
+        random.position.x = Math.random() * this.cubeAxis.xAxis / 2 + this.cubeAxis.xAxis / 2;
+        random.position.y = this.cubeY / 2;
+
+        d.randoms = random
+      },
+      setSortedData: function () {
+        this.playSortedData.latitude = sortedByLatitude(this.cubes);
+        this.playSortedData.longitude = sortedByLongitude(this.cubes);
+        this.playSortedData.time = sortedByTime(this.cubes);
+        this.playSortedData.state = sortedByState(this.cubes);
+      },
+      completeInit: function () {
+        createCubeGeometry(this);
+        this.cubes.forEach(this.setData.bind(this));
+        this.setSortedData();
+        this.curLayout = 'cubes';
+        const that = this;
+        tweenSwitch = new TWEEN.Tween(this.animationProps)
+          .to({ interpolatePos: 1 }, Config.viewSwitchDuration)
+          .onUpdate(function () {
+            that.geometryNeedsUpdate = true;
+            that.isRunning = true;
+          })
+          .onComplete(function () {
+            that.isRunning = false;
+            that.preLayout = that.curLayout;
+            that.scene.add(that.curLayoutMap[that.preLayout].group);
+          })
+          .easing(TWEEN.Easing.Cubic.Out)
+          .start();
+        render();
+      }
+    }
+    function setBarAxis(bankChart, axis, count, index) {
+      const cubeX = bankChart.cubeX / (count / 12);
+      bankChart[axis].bandWidth = bankChart[axis].bandWidth / (count / 12);
+      bankChart[axis].perCount = Math.ceil(bankChart[axis].xAxis / count / cubeX);
+      bankChart[axis].xAxis = (bankChart[axis].perCount * cubeX + bankChart[axis].bandWidth) * count; // 调整xAxis
+      bankChart[axis].yAxis = Math.ceil(Math.max(...(bankChart.data.map(row => row[index]))) / bankChart[axis].perCount / bankChart[axis].perCount) * bankChart[axis].perCount * bankChart.cubeY; // 调整yAxis
+      bankChart[axis].ygrid = bankChart[axis].perCount * bankChart.cubeY;
+      bankChart[axis].xgrid = bankChart[axis].perCount * cubeX + bankChart[axis].bandWidth;
+      bankChart[axis].zgrid = bankChart.cubeZ;
+      bankChart[axis].zAxis = bankChart.cubeZ;
+      // console.log(111, bankChart[axis].xgrid, bankChart[axis].xAxis, bankChart[axis].bandWidth)
+      bankChart[axis].scaleY = i => i * bankChart[axis].perCount * bankChart[axis].perCount;
+      bankChart[axis].scaleZ = i => '';
+      bankChart[axis].scaleX = i => i + 1;
+    }
+    function sortedByLatitude(cubes) {
+      const temp = {};
+      const sortedCubes = [];
+      cubes.forEach(row => {
+        const fixed = JSON.stringify(row.userData.centerPos.z);
+        if (temp[fixed]) {
+          temp[fixed].push(row);
+        } else {
+          temp[fixed] = [row];
+        }
+      })
+      Object.values(temp).map(row => sortedCubes.push(row));
+      return sortedCubes;
+    }
+    function sortedByLongitude(cubes) {
+      const temp = {};
+      const sortedCubes = [];
+      cubes.forEach(row => {
+        const fixed = JSON.stringify(row.userData.centerPos.x);
+        if (temp[fixed]) {
+          temp[fixed].push(row);
+        } else {
+          temp[fixed] = [row];
+        }
+      })
+      Object.values(temp).map(row => sortedCubes.push(row));
+      return sortedCubes;
+    }
+    function sortedByTime(cubes) {
+      const temp = {};
+      const sortedCubes = [];
+      cubes.forEach(row => {
+        const fixed = JSON.stringify(row.userData.date);
+        if (temp[fixed]) {
+          temp[fixed].push(row);
+        } else {
+          temp[fixed] = [row];
+        }
+      })
+      const keys = Object.keys(temp);
+      keys.sort(function (a, b) { return b < a ? 1 : -1 }).map(row => sortedCubes.push(temp[row]));
+      return sortedCubes;
+    }
+    function sortedByState(cubes) {
+      const temp = {};
+      const sortedCubes = [];
+      cubes.forEach(row => {
+        const fixed = JSON.stringify(row.userData.centerPos.x + '' + row.userData.centerPos.z);
+        if (temp[fixed]) {
+          temp[fixed].push(row);
+        } else {
+          temp[fixed] = [row];
+        }
+      })
+      Object.keys(temp).map(row => sortedCubes.push(temp[row]));
+      return sortedCubes;
+    }
+    function randomDate(start, end) {
+      return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
+    }
+
+    const types = ['1-war', '2-conf', '3-sport'];
+    function init() {
+      bankChart = new BankChart();
+      queue().defer(d3.csv, "../bank/bank.csv").await(function (error, data) {
+        data.forEach(row => {
+          row.date = moment(randomDate(new Date(1973, 0, 1), new Date())).format('YYYY/MM/DD HH:mm:ss');
+          row.type = types[Math.floor(Math.random() * 3)];
+        })
+        bankChart.data = data;
+
+        const tooltipPosition = {};
+        let intersects = [];
+        let INTERSECTED;
+        const mouse = new THREE.Vector2();
+        const tooltip = document.getElementById('tooltip');
+        document.addEventListener('mousemove', onmouseOver, false);
+
+        function onmouseOver(event) {
+          mouse.x = (event.clientX / bankChart.width) * 2 - 1;
+          mouse.y = - (event.clientY / bankChart.height) * 2 + 1;
+          tooltipPosition.x = event.clientX + 'px';
+          tooltipPosition.y = event.clientY + 'px';
+          getIntersectObjects();
+        }
+        function getIntersectObjects() {
+          bankChart.raycaster.setFromCamera(mouse, bankChart.camera);
+
+          intersects = bankChart.raycaster.intersectObjects(bankChart.scene.children, true);
+          if (intersects.length) {
+            if (intersects[0].object.customType === 'cube' && INTERSECTED !== intersects[0].object) {
+              if (INTERSECTED) INTERSECTED.material.color.set(INTERSECTED.currentColor);
+              INTERSECTED = intersects[0].object;
+              INTERSECTED.currentColor = JSON.parse(JSON.stringify(INTERSECTED.material.color));
+              INTERSECTED.material.color.set(0xff0000);
+              tooltip.innerHTML = INTERSECTED.customName + '-' + INTERSECTED.customLon + '-' + INTERSECTED.customLat;
+              tooltip.style.left = tooltipPosition ? tooltipPosition.x : '';
+              tooltip.style.top = tooltipPosition ? tooltipPosition.y : '';
+              tooltip.style.display = 'block';
+            }
+          } else {
+            if (INTERSECTED) INTERSECTED.material.color.set(INTERSECTED.currentColor);
+            tooltip.style.display = 'none';
+          }
+        }
+
+        bankChart.init();
+      })
+    }
+    init();
+
+    function render() {
+      requestAnimationFrame(render);
+      if (bankChart.inited) {
+        bankChart.geometryNeedsUpdate = false;
+      }
+      bankChart.controls.update();
+      TWEEN.update();
+      if (bankChart.inited) {
+        bankChart.animate();
+      }
+      bankChart.renderer.render(bankChart.scene, bankChart.camera);
+    }
+
+    function createCubeGeometry(bankChart) {
+      const len = bankChart.data.length;
+      for (let i = 0; i < len; i++) {
+        initCube(bankChart, bankChart.data[i]);
+      }
+    }
+    const cubesColorScale = d3.scaleOrdinal().domain(types).range(["#07b74a", "#00ff2e", "00ffb2"]);
+    function initCube(bankChart, item, i, j) {
+      const material = new THREE.MeshLambertMaterial({
+        color: cubesColorScale(item.type),
+        transparent: true
+      });
+      const cube = new THREE.Mesh(bankChart.cubeGeometry, material);
+      cube.customType = 'cube';
+      cube.customName = item.date;
+      cube.customLat = item.latitude;
+      cube.customLon = item.longitude;
+      item.centerPos.y = item.j * bankChart.cubeY + bankChart.cubeY / 2;
+
+      var helper = new THREE.BoxHelper(cube);
+      helper.material.color.set(0xe8eae9);
+
+      const cubeGroup = new THREE.Object3D();
+      cubeGroup.add(cube, helper);
+
+      bankChart.cubes.push(cubeGroup);
+      bankChart.scene.add(cubeGroup);
+      bankChart.preLayout = 'randoms';
+    }
+    function updateCubeGeometry(bankChart) {
+      for (const item of bankChart.cubes) {
+        item.scale.set(item[bankChart.curLayout].cubeXScale || 1, 1, 1);
+        item.position.copy(item[bankChart.preLayout].position);
+        item.position.mix(item[bankChart.curLayout].position, bankChart.animationProps.interpolatePos);
+        // console.log(item)
+      }
+    }
+
+    let timers = [];
+    initViewSwitch(bankChart);
+    function initViewSwitch(bankChart) {
+      $('#buttons').click(function (event) {
+        const target = event.target;
+        if (bankChart.preLayout !== target.id) {
+          timers.forEach(row => clearTimeout(row));
+          timers = [];
+          bankChart.cubes.forEach(row => row.visible = true);
+          if (target.nodeName.toLocaleLowerCase() == 'li') {
+            Object.values(bankChart.curLayoutMap).forEach(row => bankChart.scene.remove(row.group));
+            bankChart.curLayout = target.id;
+            bankChart.animationProps.interpolatePos = 0;
+            // bankChart.initCamera();
+            // bankChart.initControls();
+            tweenSwitch = new TWEEN.Tween(bankChart.animationProps)
+              .to({ interpolatePos: 1 }, Config.viewSwitchDuration)
+              .onUpdate(function () {
+                bankChart.geometryNeedsUpdate = true;
+                bankChart.isRunning = true;
+              })
+              .onComplete(function () {
+                bankChart.isRunning = false;
+                bankChart.preLayout = target.id;
+                bankChart.scene.add(bankChart.curLayoutMap[target.id].group);
+              })
+              .easing(TWEEN.Easing.Cubic.Out)
+              .start();
+          }
+        }
+      })
+    }
+    initPlaySwitch(bankChart);
+    function initPlaySwitch(bankChart) {
+      $('#plays').click(function (event) {
+        const target = event.target;
+        timers.forEach(row => clearTimeout(row));
+        timers = [];
+        if (target.nodeName.toLocaleLowerCase() == 'li') {
+          // bankChart.initCamera();
+          // bankChart.initControls();
+          bankChart.cubes.forEach(row => row.visible = false);
+          const data = bankChart.playSortedData[target.id];
+          bankChart.isRunning = true;
+          for (let i = 0; i < data.length; i++) {
+            timers.push(setTimeout(() => {
+              data[i].forEach(row => {
+                row.visible = true;
+              });
+            }, i * 100));
+          }
+        }
+      })
+    }
+  </script>
+</body>
+
+</html>

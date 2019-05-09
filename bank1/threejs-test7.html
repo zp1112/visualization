@@ -181,7 +181,7 @@
 
                 this.scaleLinearLat = d3.scaleLinear().domain([maxLat, minLat]).range([0, zAxis]);
                 this.scaleLinearLon = d3.scaleLinear().domain([minLon, maxLon]).range([0, xAxis]);
-                this.scaleTime = d3.scaleTime().range([0, yAxis]).domain((d3.extent(data, function (d) { return new Date(d.date); })))
+                this.scaleTime = d3.scaleTime().range([0, this.sphereAxis.yAxis]).domain((d3.extent(data, function (d) { return new Date(d.date); })))
 
                 const density = 10;
                 this.cubeX = density;
