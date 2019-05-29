@@ -24,12 +24,16 @@
   <script src="//d3js.org/queue.v1.min.js"></script>
   <script src="../bank/js/utils.js"></script>
   <script src="../bank/js/drawaxis.js"></script>
+  <script src="../bank/js/drawSliders.js"></script>
   <style>
     html,
     body {
       height: 100%;
     }
 
+    .title {
+      color: #fff;
+    }
     #tooltip {
       position: absolute;
       background: #fff;
@@ -49,23 +53,66 @@
       padding: 10px;
       border-radius: 10px;
     }
+    .selected {
+      background: #1891c1;
+      color: #fff;
+    }
+    .slider-container {
+      position: relative;
+      width: 300px;
+    }
+    .graph-slider-container {
+      width: 100%;
+      height: 60px;
+      padding-left: 30px;
+      padding-right: 30px;
+      position: relative;
+      font-size: 0;
+      overflow: hidden;
+      background: #fff;
+      box-sizing: border-box;
+    }
+    .graph-slider-legend{
+      position: absolute;
+      background-color: #263141;
+      border-radius: 10px;
+      color: #ffffff;
+      font-size: 7px;
+      padding: 4px;
+      height: auto;
+      width: auto;
+      text-anchor: start;
+    }
   </style>
 </head>
 
 <body>
   <div id="tooltip"></div>
   <div class="buttons">
+    <div class="title">形态</div>
+
     <ul id="buttons">
-      <li id="cubes">cubes</li>
+      <li id="cubes" class="selected">cubes</li>
       <li id="spheres">spheres</li>
       <li id="bars">bars</li>
       <li id="hours">hours</li>
       <li id="years">years</li>
       <li id="planes">planes</li>
     </ul>
+    <div class="title">筛选</div>
+    <ul id="filter">
+      <li id="war" class="selected">战争</li>
+      <li id="conf" class="selected">会议</li>
+      <li id="sport" class="selected">运动</li>
+    </ul>
+    <div class="slider-container slider-container-wrapper">
+    </div>
+    <div class="title">动画</div>
     <ul id="plays">
-      <li id="latitude">latitude</li>
-      <li id="longitude">longitude</li>
+      <li id="latitudedec">latitude-dec</li>
+      <li id="latitudeinc">latitude-inc</li>
+      <li id="longitudedec">longitude-dec</li>
+      <li id="longitudeinc">longitude-inc</li>
       <li id="time">time</li>
       <li id="state">state</li>
     </ul>
@@ -76,29 +123,30 @@
       this.y = this.y + (v2.y - this.y) * factor;
       this.z = this.z + (v2.z - this.z) * factor;
     };
-    const texture = new THREE.TextureLoader().load('../bank/china.jpg');
+    const mapTexture = new THREE.TextureLoader().load('../bank/china.jpg');
     var bankChart;
+    const types = ['1-war', '2-conf', '3-sport'];
     var Config = {
       cameraDistance: 500,
       cameraDistanceMin: 30,
       cameraDistanceMax: 10000,
       cameraDistanceMin2D: 30,
       viewSwitchDuration: 1000,
-      materialCountryBorder: new THREE.LineBasicMaterial({ color: 0xFFFFFF, linewidth: 1.5 }),
       far: 10000,
       near: 1,
-      fov: 45
+      fov: 45,
+      fovMap: {
+        'bars': 30,
+        'hours': 28,
+        'years': 26
+      }
     }
     function BankChart() {
       this.isRunning = true;
-      this.countriesObject3D = null;
       this.geometryNeedsUpdate = false;
 
       this.animationProps = {
-        interpolatePos: 0.0,
-        lineAnimatePos: 0.0,
-        lineAnimateOffset: 0.0,
-        colorChangeID: 0
+        interpolatePos: 0.0
       };
       this.inited = false;
 
@@ -112,6 +160,7 @@
       this.cubes = [];
       this.curLayout = '';
       this.preLayout = '';
+      this.curFilters = ['war', 'conf', 'sport'];
 
       this.sphereGridGroup = new THREE.Group();
       this.barGridGroup = new THREE.Group();
@@ -173,55 +222,7 @@
         this.initThree();
         this.initData();
       },
-      initData: function () {
-        const { data } = this;
-        let temp = {};
-        const [minLat, maxLat] = d3.extent(data.map(row => +row.latitude));
-        const [minLon, maxLon] = d3.extent(data.map(row => +row.longitude));
-
-        const { xAxis, yAxis, zAxis } = this.cubeAxis;
-
-        this.scaleLinearLat = d3.scaleLinear().domain([maxLat, minLat]).range([0, zAxis]);
-        this.scaleLinearLon = d3.scaleLinear().domain([minLon, maxLon]).range([0, xAxis]);
-        this.scaleTime = d3.scaleTime().range([0, this.sphereAxis.yAxis]).domain((d3.extent(data, function (d) { return new Date(d.date); })))
-        const density = 10;
-        this.cubeX = density;
-        this.cubeZ = density;
-        for (const item of data) {
-          const posX = parseInt(this.scaleLinearLon(item.longitude) / density);
-          const posZ = parseInt(this.scaleLinearLat(item.latitude) / density);
-          let x = (posX - 1) * density + density * 3 / 2;
-          let z = (posZ - 1) * density + density * 3 / 2;
-          if (x > xAxis - density / 2) {
-            x = x - density;
-          }
-          if (z > zAxis - density / 2) {
-            z = z - density;
-          }
-          const centerPos = { x, z };
-          item.centerPos = centerPos;
-        }
-        data.sort((a, b) => {
-          return a.type > b.type ? 1 : -1;
-        })
-        data.forEach(row => {
-          const fixed = JSON.stringify(row.centerPos);
-          if (temp[fixed]) {
-            temp[fixed] += 1;
-          } else {
-            temp[fixed] = 1;
-          }
-          row.j = temp[fixed];
-        })
-        this.maxCount = Math.max(...(Object.values(temp)));
-        this.cubeY = 400 / this.maxCount;
-        if (this.cubeY < density) {
-          this.cubeX = this.cubeZ = this.cubeY;
-        }
-
-        if (this.cubeY > this.cubeX) {
-          this.cubeY = this.cubeX
-        }
+      resolveDataByDate: function(data) {
         for (const item of data) {
           const month = new Date(item.date).getMonth();
           const monthArr = data.filter(row => row.month === month);
@@ -253,6 +254,60 @@
           }
           item.year = year;
         }
+      },
+      initData: function () {
+        const { data } = this;
+        const [minLat, maxLat] = d3.extent(data.map(row => +row.latitude));
+        const [minLon, maxLon] = d3.extent(data.map(row => +row.longitude));
+
+        const { xAxis, yAxis, zAxis } = this.cubeAxis;
+
+        this.scaleLinearLat = d3.scaleLinear().domain([maxLat, minLat]).range([0, zAxis]);
+        this.scaleLinearLon = d3.scaleLinear().domain([minLon, maxLon]).range([0, xAxis]);
+        this.scaleTime = d3.scaleTime().range([0, this.sphereAxis.yAxis]).domain((d3.extent(data, function (d) { return new Date(d.date); })))
+        const density = 10;
+        this.cubeX = density;
+        this.cubeZ = density;
+        for (const item of data) {
+          const posX = parseInt(this.scaleLinearLon(item.longitude) / density);
+          const posZ = parseInt(this.scaleLinearLat(item.latitude) / density);
+          let x = (posX - 1) * density + density * 3 / 2;
+          let z = (posZ - 1) * density + density * 3 / 2;
+          if (x > xAxis - density / 2) {
+            x = x - density;
+          }
+          if (z > zAxis - density / 2) {
+            z = z - density;
+          }
+          const centerPos = { x, z };
+          item.centerPos = centerPos;
+        }
+        // 按照type排序
+        data.sort((a, b) => {
+          return a.type > b.type ? 1 : -1;
+        })
+
+        let temp = {};
+        data.forEach(row => {
+          const fixed = JSON.stringify(row.centerPos);
+          if (temp[fixed]) {
+            temp[fixed] += 1;
+          } else {
+            temp[fixed] = 1;
+          }
+          row.j = temp[fixed];
+        })
+        // 调整粒子的长宽高相等
+        this.maxCount = Math.max(...(Object.values(temp)));
+        this.cubeY = yAxis / this.maxCount;
+        if (this.cubeY < density) {
+          this.cubeX = this.cubeZ = this.cubeY;
+        }
+
+        if (this.cubeY > this.cubeX) {
+          this.cubeY = this.cubeX
+        }
+        this.resolveDataByDate(data);
 
         this.cubeGeometry = new THREE.BoxGeometry(this.cubeX - 1, this.cubeY - 1, this.cubeZ - 1);
         this.cubesColorScale = d3.scaleLinear().domain([0, this.maxCount]).range([d3.rgb("#007AFF"), d3.rgb('#ff4300')]);
@@ -276,6 +331,7 @@
         this.maxYear = maxYear;
         setBarAxis(this, 'yearAxis', maxYear - minYear + 1, 'yearIndex');
 
+        // 坐标轴根据象限变换
         const vector = this.camera.getWorldDirection(new THREE.Vector3());
         this.quadrant = helperMethods.getQuadrant(0, 0, vector.x, vector.z);
 
@@ -314,10 +370,6 @@
         this.scene.translateX(-this.width / 4);
         this.scene.translateY(this.height / 4);
         this.scene.add(new THREE.AmbientLight(0xffffff));
-        pointLight = new THREE.PointLight(0x000000);
-        pointLight.position.set(0, 500, 1000);
-        pointLight.intensity = 1.0;
-        this.scene.add(pointLight);
         const that = this;
 
         window.addEventListener('resize', function () {
@@ -335,7 +387,6 @@
         const aspect = this.width / this.height;
         this.camera = new THREE.PerspectiveCamera(Config.fov, aspect, Config.near, Config.far);
         this.camera.position.set(800, 1500, 1500);
-        this.camera.lookAt({ x: 0, y: 0, z: 0 });//让相机指向场景中心
       },
       animate: function () {
         const vector = this.camera.getWorldDirection(new THREE.Vector3());
@@ -348,72 +399,121 @@
           updateCubeGeometry(this);
         }
       },
-      setData: function (d, i) {
-        d.userData = this.data[i];
-        const { date, longitude, latitude } = this.data[i];
+      setData: function (d, i, data) {
+        d.userData = data[i];
+        const { date, longitude, latitude } = data[i];
         const { cubeX, cubeY, cubeZ, cubes } = this;
-        const sphere = { position: {} };
-        sphere.position.x = this.scaleLinearLon(longitude)
-        sphere.position.y = this.scaleTime(new Date(date)) + cubeY
-        sphere.position.z = this.scaleLinearLat(latitude)
+        const sphere = { position: {
+          x: this.scaleLinearLon(longitude),
+          y: this.scaleTime(new Date(date)) + cubeY,
+          z: this.scaleLinearLat(latitude)
+        }};
         d.spheres = sphere
+        d.spheres1 = sphere
 
-        const bar = { position: {} }
         const { perCount, bandWidth } = this.barAxis;
-        bar.position.x = this.data[i].index % perCount * cubeX + cubeX / 2 + this.data[i].month * (cubeX * perCount + bandWidth) + bandWidth / 2
-        bar.position.y = ~~(this.data[i].index / perCount) * cubeY + cubeY / 2
-        bar.position.z = cubeZ / 2
-
+        const bar = { position: {
+          x: data[i].index % perCount * cubeX + cubeX / 2 + data[i].month * (cubeX * perCount + bandWidth) + bandWidth / 2,
+          y: ~~(data[i].index / perCount) * cubeY + cubeY / 2,
+          z: cubeZ / 2
+        } }
         d.bars = bar
+        d.bars1 = bar
 
-        const hour = { position: {} }
         const hourCubeX = cubeX / 2;
-        hour.position.x = this.data[i].hourIndex % this.hourAxis.perCount * hourCubeX + hourCubeX / 2 + this.data[i].hour * (hourCubeX * this.hourAxis.perCount + this.hourAxis.bandWidth) + bandWidth / 2
-        hour.position.y = ~~(this.data[i].hourIndex / this.hourAxis.perCount) * cubeY + cubeY / 2
-        hour.position.z = cubeZ / 2
-
+        const hour = { position: {
+          x: data[i].hourIndex % this.hourAxis.perCount * hourCubeX + hourCubeX / 2 + data[i].hour * (hourCubeX * this.hourAxis.perCount + this.hourAxis.bandWidth) + bandWidth / 2,
+          y: ~~(data[i].hourIndex / this.hourAxis.perCount) * cubeY + cubeY / 2,
+          z: cubeZ / 2
+        } }
+        hour.cubeXScale = 0.5
         d.hours = hour
-        d.hours.cubeXScale = 0.5;
+        d.hours1 = hour
 
         const year = { position: {} }
         year.cubeXScale = 12 / (this.maxYear - this.minYear + 1);
         const yearCubeX = cubeX * year.cubeXScale;
-        year.position.x = this.data[i].yearIndex % this.yearAxis.perCount * yearCubeX + yearCubeX / 2 + (this.data[i].year - this.minYear) * (yearCubeX * this.yearAxis.perCount + this.yearAxis.bandWidth) + bandWidth / 2
-        year.position.y = ~~(this.data[i].yearIndex / this.yearAxis.perCount) * cubeY + cubeY / 2
+        year.position.x = data[i].yearIndex % this.yearAxis.perCount * yearCubeX + yearCubeX / 2 + (data[i].year - this.minYear) * (yearCubeX * this.yearAxis.perCount + this.yearAxis.bandWidth) + bandWidth / 2
+        year.position.y = ~~(data[i].yearIndex / this.yearAxis.perCount) * cubeY + cubeY / 2
         year.position.z = cubeZ / 2
-
         d.years = year
+        d.years1 = year
 
-        const cube = { position: {} }
-        cube.position.x = this.data[i].centerPos.x
-        cube.position.y = this.data[i].j * cubeY + cubeY / 2
-        cube.position.z = this.data[i].centerPos.z
-
+        const cube = { position: {
+          x: data[i].centerPos.x,
+          y: data[i].j * cubeY + cubeY / 2,
+          z: data[i].centerPos.z
+        } }
         d.cubes = cube
+        d.cubes1 = cube
 
-        const plane = { position: {} }
-        plane.position.x = this.data[i].centerPos.x
-        plane.position.y = cubeY / 2
-        plane.position.z = this.data[i].centerPos.z
-
+        const plane = { position: {
+          x: data[i].centerPos.x,
+          y: cubeY / 2,
+          z: data[i].centerPos.z
+        } }
         d.planes = plane
+        d.planes1 = plane
 
-        const random = { position: {} }
-        random.position.z = Math.random() * this.cubeAxis.zAxis / 2 + this.cubeAxis.zAxis / 2;
-        random.position.x = Math.random() * this.cubeAxis.xAxis / 2 + this.cubeAxis.xAxis / 2;
-        random.position.y = this.cubeY / 2;
-
+        const random = { position: {
+          x: Math.random() * this.cubeAxis.zAxis / 2 + this.cubeAxis.zAxis / 2,
+          y: Math.random() * this.cubeAxis.xAxis / 2 + this.cubeAxis.xAxis / 2,
+          z: this.cubeY / 2
+        } }
         d.randoms = random
       },
+      setFilterData: function (d, i, data) {
+        d.userData = data[i];
+        const { date, longitude, latitude } = data[i];
+        const { cubeX, cubeY, cubeZ, cubes } = this;
+
+        d.cubes = d.cubes1
+        const cube = { position: {
+          x: data[i].centerPos.x,
+          y: data[i].j * cubeY + cubeY / 2,
+          z: data[i].centerPos.z
+        } }
+        d.cubes1 = cube
+
+        d.bars = d.bars1
+        const { perCount, bandWidth } = this.barAxis;
+        const bar = { position: {
+          x: data[i].index % perCount * cubeX + cubeX / 2 + data[i].month * (cubeX * perCount + bandWidth) + bandWidth / 2,
+          y: ~~(data[i].index / perCount) * cubeY + cubeY / 2,
+          z: cubeZ / 2
+        } }
+        d.bars1 = bar
+
+        d.hours = d.hours1
+        const hourCubeX = cubeX / 2;
+        const hour = { position: {
+          x: data[i].hourIndex % this.hourAxis.perCount * hourCubeX + hourCubeX / 2 + data[i].hour * (hourCubeX * this.hourAxis.perCount + this.hourAxis.bandWidth) + bandWidth / 2,
+          y: ~~(data[i].hourIndex / this.hourAxis.perCount) * cubeY + cubeY / 2,
+          z: cubeZ / 2
+        } }
+        hour.cubeXScale = 0.5;
+        d.hours1 = hour
+
+        d.years = d.years1
+        const year = { position: {} }
+        year.cubeXScale = 12 / (this.maxYear - this.minYear + 1);
+        const yearCubeX = cubeX * year.cubeXScale;
+        year.position.x = data[i].yearIndex % this.yearAxis.perCount * yearCubeX + yearCubeX / 2 + (data[i].year - this.minYear) * (yearCubeX * this.yearAxis.perCount + this.yearAxis.bandWidth) + bandWidth / 2
+        year.position.y = ~~(data[i].yearIndex / this.yearAxis.perCount) * cubeY + cubeY / 2
+        year.position.z = cubeZ / 2
+        d.years1 = year
+      },
       setSortedData: function () {
-        this.playSortedData.latitude = sortedByLatitude(this.cubes);
-        this.playSortedData.longitude = sortedByLongitude(this.cubes);
+        this.playSortedData.latitudedec = sortedByLatitude(this.cubes, false);
+        this.playSortedData.latitudeinc = sortedByLatitude(this.cubes);
+        this.playSortedData.longitudedec = sortedByLongitude(this.cubes, false);
+        this.playSortedData.longitudeinc = sortedByLongitude(this.cubes);
         this.playSortedData.time = sortedByTime(this.cubes);
         this.playSortedData.state = sortedByState(this.cubes);
       },
       completeInit: function () {
         createCubeGeometry(this);
-        this.cubes.forEach(this.setData.bind(this));
+        this.cubes.forEach((d, i) => this.setData(d, i, this.data));
         this.setSortedData();
         this.curLayout = 'cubes';
         const that = this;
@@ -448,7 +548,8 @@
       bankChart[axis].scaleZ = i => '';
       bankChart[axis].scaleX = i => i + 1;
     }
-    function sortedByLatitude(cubes) {
+    function sortedByLatitude(cubes, direction=true) {
+      // direction为true递增
       const temp = {};
       const sortedCubes = [];
       cubes.forEach(row => {
@@ -460,9 +561,16 @@
         }
       })
       Object.values(temp).map(row => sortedCubes.push(row));
+      sortedCubes.sort((a, b) => {
+        if (direction) {
+          return a[0].userData.centerPos.z > b[0].userData.centerPos.z ? 1 : -1;
+        } else {
+          return a[0].userData.centerPos.z < b[0].userData.centerPos.z ? 1 : -1;
+        }
+      })
       return sortedCubes;
     }
-    function sortedByLongitude(cubes) {
+    function sortedByLongitude(cubes, direction=true) {
       const temp = {};
       const sortedCubes = [];
       cubes.forEach(row => {
@@ -474,6 +582,13 @@
         }
       })
       Object.values(temp).map(row => sortedCubes.push(row));
+      sortedCubes.sort((a, b) => {
+        if (direction) {
+          return a[0].userData.centerPos.x > b[0].userData.centerPos.x ? 1 : -1;
+        } else {
+          return a[0].userData.centerPos.x < b[0].userData.centerPos.x ? 1 : -1;
+        }
+      })
       return sortedCubes;
     }
     function sortedByTime(cubes) {
@@ -509,7 +624,6 @@
       return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
     }
 
-    const types = ['1-war', '2-conf', '3-sport'];
     function init() {
       bankChart = new BankChart();
       queue().defer(d3.csv, "../bank/bank.csv").await(function (error, data) {
@@ -518,6 +632,8 @@
           row.type = types[Math.floor(Math.random() * 3)];
         })
         bankChart.data = data;
+        bankChart.dataCached = data;
+        CreateSlider(bankChart, data);
 
         const tooltipPosition = {};
         let intersects = [];
@@ -558,6 +674,29 @@
       })
     }
     init();
+    var rectDragEnd = function() {
+      if (!d3.event.sourceEvent) return;
+      bankChart.cubes = bankChart.cubesCached || bankChart.cubes;
+      // 先消失粒子，再发生动画
+      bankChart.cubes.forEach(row => {
+        const rowYear = new Date(row.userData.date).getFullYear();
+        if (rowYear <= bankChart.startDate.getFullYear() || rowYear >= bankChart.endDate.getFullYear()) {
+          row.visible = false;
+        }
+      });
+      // 过滤后的数据
+      const remainedData = bankChart.data.filter(row => {
+        const rowYear = new Date(row.date).getFullYear();
+          return rowYear >= bankChart.startDate.getFullYear() && rowYear <= bankChart.endDate.getFullYear();
+      });
+      // 过滤后的粒子
+      const remainedCubes = bankChart.cubes.filter(row => {
+        const rowYear = new Date(row.userData.date).getFullYear();
+        return rowYear >= bankChart.startDate.getFullYear() && rowYear <= bankChart.endDate.getFullYear();
+      });
+      bankChart.cubesCached = bankChart.cubes;
+      resetFilterData(bankChart, remainedData, remainedCubes);
+    }
 
     function render() {
       requestAnimationFrame(render);
@@ -578,7 +717,7 @@
         initCube(bankChart, bankChart.data[i]);
       }
     }
-    const cubesColorScale = d3.scaleOrdinal().domain(types).range(["#07b74a", "#00ff2e", "00ffb2"]);
+    const cubesColorScale = d3.scaleOrdinal().domain(types).range(["#07b74a", "#00ff2e", "#ffffff"]);
     function initCube(bankChart, item, i, j) {
       const material = new THREE.MeshLambertMaterial({
         color: cubesColorScale(item.type),
@@ -605,26 +744,28 @@
       for (const item of bankChart.cubes) {
         item.scale.set(item[bankChart.curLayout].cubeXScale || 1, 1, 1);
         item.position.copy(item[bankChart.preLayout].position);
-        item.position.mix(item[bankChart.curLayout].position, bankChart.animationProps.interpolatePos);
-        // console.log(item)
+        item.position.mix(item[`${bankChart.curLayout}1`].position, bankChart.animationProps.interpolatePos);
       }
     }
-
     let timers = [];
+    let tweenSwitch;
     initViewSwitch(bankChart);
     function initViewSwitch(bankChart) {
       $('#buttons').click(function (event) {
         const target = event.target;
         if (bankChart.preLayout !== target.id) {
-          timers.forEach(row => clearTimeout(row));
-          timers = [];
+          tweenSwitch.stop();
           bankChart.cubes.forEach(row => row.visible = true);
           if (target.nodeName.toLocaleLowerCase() == 'li') {
+            bankChart.camera.fov = Config.fovMap[target.id] || Config.fov;
+            bankChart.camera.updateProjectionMatrix();
+            bankChart.renderer.render(bankChart.scene, bankChart.camera);
+            const array = Array.prototype.slice.call($(this)[0].children)
+            array.forEach(row => $(row).removeClass('selected'));
+            $(target).toggleClass('selected');
             Object.values(bankChart.curLayoutMap).forEach(row => bankChart.scene.remove(row.group));
             bankChart.curLayout = target.id;
             bankChart.animationProps.interpolatePos = 0;
-            // bankChart.initCamera();
-            // bankChart.initControls();
             tweenSwitch = new TWEEN.Tween(bankChart.animationProps)
               .to({ interpolatePos: 1 }, Config.viewSwitchDuration)
               .onUpdate(function () {
@@ -632,6 +773,7 @@
                 bankChart.isRunning = true;
               })
               .onComplete(function () {
+                bankChart.geometryNeedsUpdate = false;
                 bankChart.isRunning = false;
                 bankChart.preLayout = target.id;
                 bankChart.scene.add(bankChart.curLayoutMap[target.id].group);
@@ -649,8 +791,10 @@
         timers.forEach(row => clearTimeout(row));
         timers = [];
         if (target.nodeName.toLocaleLowerCase() == 'li') {
-          // bankChart.initCamera();
-          // bankChart.initControls();
+          bankChart.setSortedData();
+          const array = Array.prototype.slice.call($(this)[0].children)
+          array.forEach(row => $(row).removeClass('selected'));
+          $(target).toggleClass('selected');
           bankChart.cubes.forEach(row => row.visible = false);
           const data = bankChart.playSortedData[target.id];
           bankChart.isRunning = true;
@@ -664,6 +808,86 @@
         }
       })
     }
+    initFilterSwitch(bankChart);
+    function initFilterSwitch(bankChart) {
+      $('#filter').click(function (event) {
+        const target = event.target;
+        if (target.nodeName.toLocaleLowerCase() == 'li') {
+          timers.forEach(row => clearTimeout(row));
+          timers = [];
+          // 选中的列表curFilters
+          if ($(target).hasClass('selected')) {
+            const selectedIndex = bankChart.curFilters.findIndex(row => row === target.id);
+            bankChart.curFilters.splice(selectedIndex, 1);
+          } else {
+            bankChart.curFilters.push(target.id);
+          }
+          $(target).toggleClass('selected');
+          bankChart.cubes = bankChart.cubesCached || bankChart.cubes;
+          // 先消失粒子，再发生动画
+          bankChart.cubes.forEach(row => {
+            if (bankChart.curFilters.indexOf(row.userData.type.split('-')[1]) === -1) {
+              row.visible = false;
+            }
+          });
+          // 过滤后的数据
+          const remainedData = bankChart.data.filter(row => {
+            return bankChart.curFilters.indexOf(row.type.split('-')[1]) !== -1;
+          });
+          // 过滤后的粒子
+          const remainedCubes = bankChart.cubes.filter(row => {
+            return bankChart.curFilters.indexOf(row.userData.type.split('-')[1]) !== -1;
+          });
+          bankChart.cubesCached = bankChart.cubes;
+          resetFilterData(bankChart, remainedData, remainedCubes);
+        }
+      })
+    }
+    function resetFilterData(bankChart, remainedData, remainedCubes) {
+      bankChart.cubes = remainedCubes;
+      const temp = [];
+      remainedData.forEach(row => {
+        row.j = 0;
+        row.index = -1;
+        row.hourIndex = -1;
+        row.yearIndex = -1;
+      })
+      remainedData.forEach(row => {
+        const centerPos = {
+          x: row.centerPos.x,
+          z: row.centerPos.z
+        }
+        const fixed = JSON.stringify(centerPos);
+        if (temp[fixed]) {
+          temp[fixed] += 1;
+        } else {
+          temp[fixed] = 1;
+        }
+        row.j = temp[fixed];
+      })
+      // 重新设置数据和粒子的摆放顺序
+      bankChart.resolveDataByDate(remainedData)
+      bankChart.cubes.forEach((d, i) => bankChart.setFilterData(d, i, remainedData));
+
+      bankChart.animationProps.interpolatePos = 0;
+      tweenSwitch = new TWEEN.Tween(bankChart.animationProps)
+        .to({ interpolatePos: 1 }, Config.viewSwitchDuration)
+        .onUpdate(function () {
+          bankChart.geometryNeedsUpdate = true;
+          bankChart.isRunning = true;
+        })
+        .onComplete(function () {
+          bankChart.geometryNeedsUpdate = false;
+          bankChart.isRunning = false;
+          // 先发生动画，再出现粒子
+          bankChart.cubes.forEach(row => {
+            row.visible = true;
+          });
+        })
+        .easing(TWEEN.Easing.Cubic.Out)
+        .start();
+    }
+    
   </script>
 </body>
 

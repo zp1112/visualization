@@ -18,7 +18,7 @@ DrawAxis.prototype = {
 function drawRect(gridGroup, xAxis, zAxis) {
     let geometry = new THREE.PlaneGeometry(xAxis,zAxis);
     let material = new THREE.MeshBasicMaterial( {
-        map: mapTexture,
+        map: texture,
         side: THREE.DoubleSide
     });
     const rect = new THREE.Mesh(geometry, material);
