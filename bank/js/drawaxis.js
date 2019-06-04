@@ -23,7 +23,7 @@ function drawRect(gridGroup, xAxis, zAxis) {
     });
     const rect = new THREE.Mesh(geometry, material);
     rect.applyMatrix(new THREE.Matrix4().makeTranslation(xAxis / 2, 0, zAxis / 2));
-    rect.position.y =  -4;
+    rect.position.y =  -1;
     rect.rotation.x = -Math.PI / 2;
     gridGroup.add(rect);
     material.map.needsUpdate = true;
@@ -242,7 +242,7 @@ function drawGrid(options) {
 		opacity: 1,
 		resolution: resolution,
 		sizeAttenuation: !false,
-		lineWidth: 4,
+		lineWidth: 1,
 		near: bankChart.camera.near,
 		far: bankChart.camera.far
     });

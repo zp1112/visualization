@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Document</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/4.2.1/echarts.min.js"></script>
+  <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/4.2.1/extension/bmap.min.js"></script> -->
+  <script src="./third/bmap.js"></script>
+  <script src="http://api.map.baidu.com/api?v=2.0&ak=ycrNGzdrd6D7s95M05rFVZqc"></script>
+  <script src="https://d3js.org/d3.v4.min.js"></script>
+  <script src="//d3js.org/topojson.v1.min.js"></script>
+  <script src="//d3js.org/queue.v1.min.js"></script>
+  <script src="./third/jquery-3.1.1.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jcanvas/21.0.1/min/jcanvas.min.js"></script>
+  <script src="./coordtransform.js"></script>
+  <script src="./screenshotsPrint.js"></script>
+  <link rel="stylesheet" href="./reset.css">
+  </link>
+  <style>
+    html,
+    body {
+      height: 100%;
+    }
+
+    /* * {
+      margin: 0;
+      padding: 0;
+    } */
+    .map-container {
+      width: 84%;
+      height: 100%;
+      position: relative;
+      float: left;
+    }
+    #map {
+      /* position: absolute;
+      left: 0;
+      top: 0; */
+      width: 100%;
+      height: 100%;
+    }
+    #bg_canvas {
+      position: absolute;
+      top: 0;
+    }
+    #button-container {
+      /* position: absolute;
+      z-index: 11; */
+      text-align: center;
+      height: 100px;
+      width: 16%;
+      float: left;
+    }
+    .export-body {
+      background: #eee;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+    }
+    input[type="text"] {
+      width: 80px;
+      text-align: center;
+      margin-bottom: 5px;
+      color: #222;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    padding: 2px 5px;
+    }
+  </style>
+</head>
+<!-- water #044161 land #192940 boundart #064f85-->
+
+<body>
+  <div id="button-container">
+
+      <button class="print">开始截图</button>
+      <div class="export_boxy">
+          <input type="text" autocomplete="off" name="maxlat" id="maxlat" size="10" class="export_bound" onblur="canvasExt.drawCustomRect(this, canvasExt)">
+          <br>
+          <input type="text" autocomplete="off" name="minlon" id="minlon" size="10" class="export_bound" onblur="canvasExt.drawCustomRect(this, canvasExt)">
+          <input type="text" autocomplete="off" name="maxlon" id="maxlon" size="10" class="export_bound" onblur="canvasExt.drawCustomRect(this, canvasExt)">
+          <br><br>
+          <input type="text" autocomplete="off" name="minlat" id="minlat" size="10" class="export_bound" onblur="canvasExt.drawCustomRect(this, canvasExt)">
+      </div>
+      <div class="export_boxy">
+          <input type="text" autocomplete="off" name="startx" id="startx" size="10" class="export_bound" onblur="canvasExt.drawCustomRectByWidth(this, canvasExt)">
+          <input type="text" autocomplete="off" name="starty" id="starty" size="10" class="export_bound" onblur="canvasExt.drawCustomRectByWidth(this, canvasExt)">
+          <br>
+          <input type="text" autocomplete="off" name="endx" id="endx" size="10" class="export_bound" onblur="canvasExt.drawCustomRectByWidth(this, canvasExt)">
+          <input type="text" autocomplete="off" name="endy" id="endy" size="10" class="export_bound" onblur="canvasExt.drawCustomRectByWidth(this, canvasExt)">
+      </div>
+  </div>
+  <div class="map-container">
+      <div id="map"></div>
+      <canvas id="bg_canvas" width="100%" height="100%" ></canvas>
+  </div>
+  <script>
+    // 修改了bmap.js里这句var bmap = bmapModel.__bmap = new BMap.Map(bmapRoot, {enableMapClick:false}); 就关闭了bmap的click功能
+    function convert(data) {
+      const points = [];
+      data[0].forEach(item => {
+        points.push(coordtransform.gcj02tobd09(...item));
+      });
+      const newPoints = [];
+      newPoints[0] = points;
+
+      return newPoints;
+    }
+    function renderItem(params, api, coords) {
+      var points = [];
+      for (var i = 0; i < coords.length; i++) {
+        points.push(api.coord(coords[i]));
+      }
+      var color = api.visual('color');
+
+      return {
+        type: 'polygon',
+        shape: {
+          points: echarts.graphic.clipPointsByRect(points, {
+            x: params.coordSys.x,
+            y: params.coordSys.y,
+            width: params.coordSys.width,
+            height: params.coordSys.height
+          })
+        },
+        style: api.style({
+          fill: color,
+          stroke: echarts.color.lift(color)
+        })
+      };
+    }
+
+    const adcodes = [110000, 120000, 130000, 140000, 150000, 210000, 220000, 230000,
+      310000, 320000, 330000, 340000, 350000, 360000, 370000, 410000, 420000, 430000,
+      440000, 450000, 460000, 500000, 510000, 520000, 530000, 540000, 610000, 620000,
+      630000, 640000, 650000, 710000, 810000, 820000, 100000];
+    function getBoundary() {
+      var bdary = new BMap.Boundary();
+      bdary.get('中华人民共和国', function (rs) {       //获取行政区域  
+        var count = rs.boundaries.length; //行政区域的点有多少个
+        for (var i = 0; i < count; i++) {
+          var ply = new BMap.Polygon(rs.boundaries[i], {
+            strokeColor: "#000",
+            fillColor: "#4B4D52", fillOpacity: "0.3",
+            strokeOpacity: 0.01, strokeWeight: 2
+          }); //建立多边形覆盖物
+          bmap.addOverlay(ply);
+        }
+      });
+    }
+    var myChart = echarts.init(document.getElementById('map'));
+    var bmap;
+    var canvasExt;
+    queue().defer(d3.json, "100000.json").defer(d3.json, '100000_full.json').await(function (error, chinaJson, provinceJson) {
+      const option = {
+        tooltip: {
+          trigger: "item"
+        },
+        bmap: {
+          center: [110.5, 30],
+          zoom: 5,
+          roam: true,
+          mapStyle: {
+            styleJson:
+              [
+                {
+                  "featureType": "water",
+                  "elementType": "all",
+                  "stylers": {
+                    "color": "#044161"
+                  }
+                },
+                {
+                  "featureType": "land",
+                  "elementType": "all",
+                  "stylers": {
+                    "color": "#192940"
+                  }
+                },
+                {
+                  "featureType": "boundary",
+                  "elementType": "geometry",
+                  "stylers": {
+                    "color": "#064f85",
+                    "visibility": "off"
+                  }
+                },
+                {
+                  "featureType": "railway",
+                  "elementType": "all",
+                  "stylers": {
+                    "visibility": "off"
+                  }
+                },
+                {
+                  "featureType": "highway",
+                  "elementType": "geometry",
+                  "stylers": {
+                    "color": "#004981"
+                  }
+                },
+                {
+                  "featureType": "highway",
+                  "elementType": "geometry.fill",
+                  "stylers": {
+                    "color": "#005b96",
+                    "lightness": 1
+                  }
+                },
+                {
+                  "featureType": "highway",
+                  "elementType": "labels",
+                  "stylers": {
+                    "visibility": "off"
+                  }
+                },
+                {
+                  "featureType": "arterial",
+                  "elementType": "geometry",
+                  "stylers": {
+                    "color": "#004981"
+                  }
+                },
+                {
+                  "featureType": "arterial",
+                  "elementType": "geometry.fill",
+                  "stylers": {
+                    "color": "#00508b"
+                  }
+                },
+                {
+                  "featureType": "poi",
+                  "elementType": "all",
+                  "stylers": {
+                    "visibility": "off"
+                  }
+                },
+                {
+                  "featureType": "green",
+                  "elementType": "all",
+                  "stylers": {
+                    "color": "#056197",
+                    "visibility": "off"
+                  }
+                },
+                {
+                  "featureType": "subway",
+                  "elementType": "all",
+                  "stylers": {
+                    "visibility": "off"
+                  }
+                },
+                {
+                  "featureType": "manmade",
+                  "elementType": "all",
+                  "stylers": {
+                    "visibility": "off"
+                  }
+                },
+                {
+                  "featureType": "local",
+                  "elementType": "all",
+                  "stylers": {
+                    "visibility": "off"
+                  }
+                },
+                {
+                  "featureType": "arterial",
+                  "elementType": "labels",
+                  "stylers": {
+                    "visibility": "off"
+                  }
+                },
+                {
+                  "featureType": "boundary",
+                  "elementType": "geometry.fill",
+                  "stylers": {
+                    "color": "#029fd4"
+                  }
+                },
+                {
+                  "featureType": "building",
+                  "elementType": "all",
+                  "stylers": {
+                    "color": "#1a5787"
+                  }
+                },
+                {
+                  "featureType": "label",
+                  "elementType": "all",
+                  "stylers": {
+                    "visibility": "off"
+                  }
+                }
+              ]
+          }
+        },
+        series: []
+      };
+      const adcodeLen = adcodes.length;
+      let count = 0;
+      for (const item of adcodes) {
+        queue().defer(d3.json, `./provincejson/${item}.json`).await(function (error, province) {
+          option.series.push({
+            type: "lines",
+            polyline: true,
+            coordinateSystem: "bmap",
+            lineStyle: {
+              width: 1,
+              opacity: 1,
+              color: "#6092A8"
+            },
+            data: province.features[0].geometry.coordinates
+          })
+          count++;
+          if (count === adcodeLen) {
+            option.series.push({
+              type: "lines",
+              polyline: true,
+              coordinateSystem: "bmap",
+              lineStyle: {
+                width: 2,
+                opacity: 1,
+                color: "#175FE5"
+              },
+              data: chinaJson.features[0].geometry.coordinates
+            })
+            // option.series.push({
+            //     name: 'pm2.5',
+            //     type: 'scatter',
+            //     coordinateSystem: 'bmap',
+            //     data: [{name: 'ss', value: [110.5, 30, 10]}],
+            //     symbolSize: function (val) {
+            //         return val[2] * 10;
+            //     },
+            //     label: {
+            //         normal: {
+            //             formatter: '{b}',
+            //             position: 'right',
+            //             show: false
+            //         },
+            //         emphasis: {
+            //             show: true
+            //         }
+            //     },
+            //     itemStyle: {
+            //         normal: {
+            //             color: '#ddb926'
+            //         }
+            //     }
+            // })
+            myChart.setOption(option);
+            bmap = myChart.getModel().getComponent('bmap').getBMap();
+            getBoundary();
+            var clientWidth = document.documentElement.clientWidth || document.body.clientWidth
+            var clientHeight = document.documentElement.clientHeight || document.body.clientHeight
+            // 更新canvas宽高
+            $("#bg_canvas").attr("width", clientWidth);
+            $("#bg_canvas").attr("height", clientHeight);
+            $("#bg_canvas").hide();
+            $(".print").click(function(){
+                $("#bg_canvas").show()
+                alert('现在你可以使用鼠标拖拽选取打印区域，松开后完成')
+                //调用选取截屏
+                canvasExt = clipScreenshots(bmap, "bg_canvas");
+            });
+            bmap.addEventListener("click", function (e) {
+              var x = e.point.lng;
+              var y = e.point.lat;
+            })
+          }
+        })
+      }
+    })
+  </script>
+</body>
+
+</html>

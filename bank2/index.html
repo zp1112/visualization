@@ -123,7 +123,7 @@
       this.y = this.y + (v2.y - this.y) * factor;
       this.z = this.z + (v2.z - this.z) * factor;
     };
-    const mapTexture = new THREE.TextureLoader().load('../bank/china.jpg');
+    const mapTexture = new THREE.TextureLoader().load('../bank/china5.jpg');
     var bankChart;
     const types = ['1-war', '2-conf', '3-sport'];
     var Config = {
@@ -141,6 +141,8 @@
         'years': 26
       }
     }
+    const width = window.innerWidth;
+    const height = window.innerHeight;
     function BankChart() {
       this.isRunning = true;
       this.geometryNeedsUpdate = false;
@@ -170,21 +172,21 @@
       this.planeGridGroup = new THREE.Group();
 
       this.cubeAxis = {
-        xAxis: 1000,
+        xAxis: 900,
         yAxis: 400,
-        zAxis: 600,
-        xgrid: 100,
+        zAxis: 660,
+        xgrid: 900 / 10,
         ygrid: 100,
-        zgrid: 120,
+        zgrid: 660 / 5,
         group: this.cubeGridGroup
       }
       this.sphereAxis = {
-        xAxis: 1000,
-        yAxis: 600,
+        xAxis: 900,
+        yAxis: 660,
         zAxis: 600,
-        xgrid: 100,
         ygrid: 100,
-        zgrid: 150,
+        xgrid: 900 / 10,
+        zgrid: 660 / 5,
         group: this.sphereGridGroup
       }
       this.barAxis = {
@@ -203,12 +205,12 @@
         group: this.yearGridGroup
       }
       this.planeAxis = {
-        xAxis: 1000,
-        zAxis: 600,
+        xAxis: 900,
+        zAxis: 660,
         yAxis: 0,
         ygrid: 0,
-        xgrid: 100,
-        zgrid: 100,
+        xgrid: 900 / 10,
+        zgrid: 660 / 5,
         group: this.planeGridGroup
       }
 
@@ -257,8 +259,10 @@
       },
       initData: function () {
         const { data } = this;
-        const [minLat, maxLat] = d3.extent(data.map(row => +row.latitude));
-        const [minLon, maxLon] = d3.extent(data.map(row => +row.longitude));
+        const [minLat1, maxLat1] = d3.extent(data.map(row => +row.latitude));
+        const [minLon1, maxLon1] = d3.extent(data.map(row => +row.longitude));
+        const [minLat, maxLat] = [18.617961, 56.796256];
+        const [minLon, maxLon] = [71.939266, 138.316713];
 
         const { xAxis, yAxis, zAxis } = this.cubeAxis;
 
@@ -269,10 +273,10 @@
         this.cubeX = density;
         this.cubeZ = density;
         for (const item of data) {
-          const posX = parseInt(this.scaleLinearLon(item.longitude) / density);
-          const posZ = parseInt(this.scaleLinearLat(item.latitude) / density);
-          let x = (posX - 1) * density + density * 3 / 2;
-          let z = (posZ - 1) * density + density * 3 / 2;
+          const posX = parseInt(this.scaleLinearLon(item.longitude.toFixed(2)) / density);
+          const posZ = parseInt(this.scaleLinearLat(item.latitude.toFixed(2)) / density);
+          let x = (posX - 1) * density + density / 2;
+          let z = (posZ - 1) * density + density / 2;
           if (x > xAxis - density / 2) {
             x = x - density;
           }
@@ -281,6 +285,8 @@
           }
           const centerPos = { x, z };
           item.centerPos = centerPos;
+          item.x = this.scaleLinearLon(item.longitude.toFixed(2));
+          item.z = this.scaleLinearLat(item.latitude.toFixed(2));
         }
         // 按照type排序
         data.sort((a, b) => {
@@ -299,7 +305,7 @@
         })
         // 调整粒子的长宽高相等
         this.maxCount = Math.max(...(Object.values(temp)));
-        this.cubeY = yAxis / this.maxCount;
+        this.cubeY = Math.floor(yAxis / this.maxCount);
         if (this.cubeY < density) {
           this.cubeX = this.cubeZ = this.cubeY;
         }
@@ -307,6 +313,8 @@
         if (this.cubeY > this.cubeX) {
           this.cubeY = this.cubeX
         }
+        // 调整maxCount
+        this.maxCount = yAxis / this.cubeY;
         this.resolveDataByDate(data);
 
         this.cubeGeometry = new THREE.BoxGeometry(this.cubeX - 1, this.cubeY - 1, this.cubeZ - 1);
@@ -404,9 +412,9 @@
         const { date, longitude, latitude } = data[i];
         const { cubeX, cubeY, cubeZ, cubes } = this;
         const sphere = { position: {
-          x: this.scaleLinearLon(longitude),
+          x: data[i].x,
           y: this.scaleTime(new Date(date)) + cubeY,
-          z: this.scaleLinearLat(latitude)
+          z: data[i].z
         }};
         d.spheres = sphere
         d.spheres1 = sphere
@@ -441,16 +449,16 @@
 
         const cube = { position: {
           x: data[i].centerPos.x,
-          y: data[i].j * cubeY + cubeY / 2,
+          y: (data[i].j - 1) * cubeY + cubeY / 2,
           z: data[i].centerPos.z
         } }
         d.cubes = cube
         d.cubes1 = cube
 
         const plane = { position: {
-          x: data[i].centerPos.x,
+          x: data[i].x,
           y: cubeY / 2,
-          z: data[i].centerPos.z
+          z: data[i].z
         } }
         d.planes = plane
         d.planes1 = plane
@@ -543,7 +551,6 @@
       bankChart[axis].xgrid = bankChart[axis].perCount * cubeX + bankChart[axis].bandWidth;
       bankChart[axis].zgrid = bankChart.cubeZ;
       bankChart[axis].zAxis = bankChart.cubeZ;
-      // console.log(111, bankChart[axis].xgrid, bankChart[axis].xAxis, bankChart[axis].bandWidth)
       bankChart[axis].scaleY = i => i * bankChart[axis].perCount * bankChart[axis].perCount;
       bankChart[axis].scaleZ = i => '';
       bankChart[axis].scaleX = i => i + 1;
@@ -626,10 +633,12 @@
 
     function init() {
       bankChart = new BankChart();
-      queue().defer(d3.csv, "../bank/bank.csv").await(function (error, data) {
+      queue().defer(d3.csv, "../bank/bank1.csv").await(function (error, data) {
         data.forEach(row => {
           row.date = moment(randomDate(new Date(1973, 0, 1), new Date())).format('YYYY/MM/DD HH:mm:ss');
           row.type = types[Math.floor(Math.random() * 3)];
+          row.longitude = +row.longitude;
+          row.latitude = +row.latitude;
         })
         bankChart.data = data;
         bankChart.dataCached = data;
@@ -659,7 +668,8 @@
               INTERSECTED = intersects[0].object;
               INTERSECTED.currentColor = JSON.parse(JSON.stringify(INTERSECTED.material.color));
               INTERSECTED.material.color.set(0xff0000);
-              tooltip.innerHTML = INTERSECTED.customName + '-' + INTERSECTED.customLon + '-' + INTERSECTED.customLat;
+              // tooltip.innerHTML = INTERSECTED.customName + '-' + INTERSECTED.customLon + '-' + INTERSECTED.customLat;
+              tooltip.innerHTML = INTERSECTED.customLon + '-' + INTERSECTED.customLat;
               tooltip.style.left = tooltipPosition ? tooltipPosition.x : '';
               tooltip.style.top = tooltipPosition ? tooltipPosition.y : '';
               tooltip.style.display = 'block';
